@@ -1,7 +1,7 @@
-# AutoXAI-pipeline
+# O-MEGA-pipeline
 *This repository contains scripts created for automizing the process of searching an optimal XAI algorithm based on quantitative metrics*
 
-In this repository we validate the idea of automating the XAI algorithm selection by executing the AutoXAI pipeline 
+In this repository we validate the idea of automating the XAI algorithm selection by executing the O-MEGA pipeline 
 on a claim matching (PFCR) task. For this particular task we use our [multiclaim](https://arxiv.org/abs/2305.07991) dataset that contains a database of various social posts 
 with their corresponding fact checks that either further acknowledge or disprove claims found in the posts. 
 In this work, we solely work with English version of this dataset.
@@ -34,7 +34,7 @@ The previous script creates the following important artifacts necessary for furt
 - `data/annotations/rationale.json` file representing all the user rationale gathered from all other rationale JSON files
 
 After having preprocessed the data, you may call OurDataset constructor to instantiate training or test subset that is used for either 
-training the AutoXAI pipeline or for further XAI algorithm evaluation. 
+training the O-MEGA pipeline or for further XAI algorithm evaluation. 
 
 ```
     from dataset import OurDataset
@@ -76,8 +76,8 @@ It is a possibility to load models from Huggingface. List of models:
 | sentence-transformers/all-mpnet-base-v2       | embeddings.word_embeddings|
 | sentence-transformers/multi-qa-mpnet-base-cos-v1 | embeddings.word_embeddings|
 
-## AutoXAI pipeline - Optimization 
-Run of Autoxai pipeline can be with run_opti.py and yaml file (./config_hyperoptimalization.yaml) for a setting hyperparameters. 
+## O-MEGA pipeline - Optimization 
+Run of O-MEGA pipeline can be with run_opti.py and yaml file (./config_hyperoptimalization.yaml) for a setting hyperparameters. 
 
 1. First, follow the instructions in [Repo setup](#Repo-setup) section
 1. Setup specific parameters in `config_hyperoptimalization.yaml`
@@ -201,5 +201,5 @@ we've created rationale masks for. Since the ferret library only supports evalua
 tailor it to our needs, to the STS task.
 
 
-For AutoXAI pipeline, we use the aforementioned 5 quantitative measures from the Ferret library, divided into two groups: plausibility, feasibility. Also, besides that we added [average precision score](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html) as an another metric for plausibility.
+For O-MEGA pipeline, we use the aforementioned 5 quantitative measures from the Ferret library, divided into two groups: plausibility, feasibility. Also, besides that we added [average precision score](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html) as an another metric for plausibility.
 
