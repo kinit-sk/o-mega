@@ -25,7 +25,7 @@ In this section you can find the necessary steps to take for setting up the repo
 
 ### Data preprocessing
 
-1. Download the following CSV files containing the posts and claims of multiclaim dataset. [LINK](https://drive.google.com/file/d/1TGJFi0rkRTwhsPV52e0WvP5AxRVNyw-n/view)
+1. Download the following folder with CSV files containing the posts and claims of multiclaim dataset and annotation to dataset [LINK](https://drive.google.com/file/d/1TGJFi0rkRTwhsPV52e0WvP5AxRVNyw-n/view)
 1. Place the downloaded folder in the root directory of the project.
 1. Preprocess the data by executing various filtering and cleaning steps using the following command: `python src/preprocess.py` (This may take up to a minute)
 
