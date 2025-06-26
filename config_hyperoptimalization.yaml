@@ -1,0 +1,93 @@
+Hyperoptimalization_parameters:
+ rationale_path: "./notebooks/tmp/Jaro_574_human_rational_tokens.json"
+ explanations_path: "./notebooks/tmp/test_explain_new_model.json"
+ dataset: "./notebooks/data"
+ perc: 1
+ model_path: "intfloat/multilingual-e5-large"
+ embeddings_module_name: "embeddings.word_embeddings"
+ methods: ["GAE_Explain","Occlusion","Input X Gradient","Guided Backprop","Feature Ablation","Kernel Shap","Gradient Shap","Lime","Saliency","ConservativeLRP"]
+#  methods: ['Saliency']
+ normalizations: ["without_normalize"]
+ explanation_maps_token: True
+ plausability_weight: 0.5
+ faithfulness_weight: 0.5
+ multiple_object: False
+
+ model_param:
+   Lime:
+     similarity_func:
+       function_name:
+         - captum.attr._core.lime.get_exp_kernel_similarity_function
+         - captum.attr._core.lime.default_perturb_func
+       parameters:
+         distance_mode: ["cosine", "euclidean"]
+         kernel_width: [450, 750]
+     interpretable_model:
+       function_name:
+         - captum._utils.models.linear_model.SkLearnLasso
+         - captum._utils.models.linear_model.LinearModel
+       parameters:
+         alpha: [1e-19, 1e-25]
+   LayerGradientXActivation:
+     layer:
+       - [model.get_embedding_layer]
+     multiply_by_inputs: true
+   GAE_Explain:
+     implemented_method: true
+   ConservativeLRP:
+     implemented_method: true
+   Occlusion_word_level:
+     implemented_method: true
+ 
+ method_param:
+   Lime:
+     parameters:
+       n_samples: [80, 90]
+     token_groups_for_feature_mask: true
+   Saliency:
+     parameters:
+       abs: [true, false]
+   Occlusion:
+     parameters:
+       sliding_window_shapes:
+         - [3, 1024]
+         - [5, 1024]
+       strides:
+         - [1, 1024]
+         - [1, 512]
+     compute_baseline: true
+   Input X Gradient: {}
+   Guided Backprop: {}
+   Deconvolution: {}
+   Gradient Shap:
+     parameters:
+       stdevs: [0.1, 0.9]
+       n_samples: [10, 15]
+     compute_baseline: true
+   Kernel Shap:
+     parameters:
+       n_samples: [80, 90]
+     compute_baseline: true
+   Feature Ablation:
+     token_groups_for_feature_mask: true
+     compute_baseline: true
+   GAE_Explain: {}
+   ConservativeLRP: {}
+   Occlusion_word_level:
+     parameters:
+       regex_condition:
+         - ""
+         - ".,!?;:…"
+   Integrated Gradients:
+     parameters:
+       n_steps: [60, 40]
+   LayerGradientXActivation: {}
+
+Optuna_parameters: 
+ sampler: "BruteForceSampler"
+ n_trials: 1
+
+Results_parameters:
+ table_counter: './tmp/count_tables/e5/without_norm/baseline_counter.csv'
+ table_sampler: './tmp/result_sampler/e5/without_norm/baseline_sampler.csv'
+ visual_aopc: './tmp/plots_methods/e5/without_norm_specific_set'
