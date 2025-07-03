@@ -41,11 +41,11 @@ training the O-MEGA pipeline or for further XAI algorithm evaluation.
     from torch.utils.data import DataLoader
 
     # Training subset
-    train_ds = OurDataset(csv_dirpath="./data", split="train")
+    train_ds = OurDataset(csv_dirpath="./notebooks/data", split="train")
     train_loader = DataLoader(train_ds)
 
     # Testing subset
-    test_ds = OurDataset(csv_dirpath="./data", split="test")
+    test_ds = OurDataset(csv_dirpath="./notebooks/data", split="test")
     test_loader = DataLoader(test_ds)
 ```
 
@@ -73,8 +73,16 @@ It is a possibility to load models from Huggingface. List of models:
 | sentence-transformers/gtr-t5-large            | encoder.embed_tokens      |
 | sentence-transformers/gtr-t5-xl               | encoder.embed_tokens      |
 | sentence-transformers/sentence-t5-xl          | encoder.embed_tokens      |
-| sentence-transformers/all-mpnet-base-v2       | embeddings.word_embeddings|
-| sentence-transformers/multi-qa-mpnet-base-cos-v1 | embeddings.word_embeddings|
+| sentence-transformers/all-mpnet-base-v2       | embeddings.word_embeddings |
+| sentence-transformers/multi-qa-mpnet-base-cos-v1 | embeddings.word_embeddings |
+| intfloat/multilingual-e5-large                | embeddings.word_embeddings |
+| sentence-transformers/all-MiniLM-L12-v2       | embeddings.word_embeddings |
+| BAAI/bge-large-en-v1.5                        | embeddings.word_embeddings |
+| BAAI/bge-base-en-v1.5                         | embeddings.word_embeddings |
+| BAAI/bge-small-en-v1.5                        | embeddings.word_embeddings |
+| llmrails/ember-v1                             | embeddings.word_embeddings |
+| thenlper/gte-large                            | embeddings.word_embeddings |
+| intfloat/e5-large-v2                          | embeddings.word_embeddings |
 
 ## O-MEGA pipeline - Optimization 
 Run of O-MEGA pipeline can be with run_opti.py and yaml file (./config_hyperoptimalization.yaml) for a setting hyperparameters. 
@@ -86,7 +94,7 @@ Run of O-MEGA pipeline can be with run_opti.py and yaml file (./config_hyperopti
 ```
 python ./src/run_opti.py
 ```
-Second option is jupyter notebook On path `./notebooks/hyper_param.ipynb`
+Second option is jupyter notebook on path `./notebooks/hyper_param.ipynb`
 
 ### Setting parameters 
 

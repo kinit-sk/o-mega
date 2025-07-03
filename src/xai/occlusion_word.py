@@ -8,6 +8,7 @@ from captum.log import log_usage
 from copy import deepcopy
 import utils
 import re
+from architecture import get_tokenizer
 
 class WordLevelOcclusion(Occlusion):
     """
@@ -367,6 +368,7 @@ class Occlusion_word_level(WordLevelOcclusion):
             token_attributions_list=[]
             for i, token_ids in enumerate(post_claim_pair):
                 # If baseline is not provided, use a default (e.g., PAD token)
+                tokenizer=get_tokenizer(self.model)
                 if baselines is None:
                     baselines = self.tokenizer.pad_token_id
                     if baselines is None:  # Some tokenizers might not have pad_token_id
@@ -380,8 +382,21 @@ class Occlusion_word_level(WordLevelOcclusion):
                 primary_tokens['input_ids']=primary_tokens['input_ids'].to(utils.get_device())
                 primary_tokens = {k: v for k, v in primary_tokens.items() if k != 'offset_mapping'}
                 secondary_tokens = {k: v for k, v in secondary_tokens.items() if k != 'offset_mapping'}
+                #cut everything under 512 
+                if len(primary_tokens['input_ids'][0]) > tokenizer.model_max_length:
+                    primary_tokens['input_ids']=primary_tokens['input_ids'][:, :tokenizer.model_max_length]
+                    primary_tokens['attention_mask']=primary_tokens['attention_mask'][:, :tokenizer.model_max_length]
+                    for k in word_to_tokens[0]:
+                        word_to_tokens[0][k] = [x for x in word_to_tokens[0][k] if x <= tokenizer.model_max_length-1]
+                    word_to_tokens[0] = {k: v for k, v in word_to_tokens[0].items() if v}
+                    
+                if len(secondary_tokens['input_ids'][0])>tokenizer.model_max_length:
+                    secondary_tokens['input_ids']=secondary_tokens['input_ids'][:, :tokenizer.model_max_length]
+                    secondary_tokens['attention_mask']=secondary_tokens['attention_mask'][:, :tokenizer.model_max_length]
+                    for k in word_to_tokens[1]:
+                        word_to_tokens[1][k] = [x for x in word_to_tokens[1][k] if x <= tokenizer.model_max_length-1]
+                    word_to_tokens[1] = {k: v for k, v in word_to_tokens[1].items() if v}
                 secondary_embedding = self.model.model.transformer(**secondary_tokens)[0]
-
                 original_output = self.forward_func(primary_tokens, secondary_embedding,*additional_forward_args if additional_forward_args else []) #previously instead of text was token_ids
                 if hasattr(original_output, 'logits'):
                     original_output = original_output.logits
@@ -442,22 +457,25 @@ class Occlusion_word_level(WordLevelOcclusion):
 
                 batch_ablated_inputs = []
                 batch_id_indices= []
-                for index,i_word in enumerate(word_iterator):
-                    # Get the words for this batch
-                    if self.regex_condition:
-                        end = min(index + batch_size, len(word_iterator)-1)
-                        batch_word_indices= list(range(i_word, word_iterator[end]))                        
-                    else:
-                        batch_word_indices= list(range(i_word, min(i_word+batch_size, num_words)))
-                    token_indices=[]
-                    for word_idx in batch_word_indices:
-                        # Create an ablated input by replacing tokens in the word with baseline
-                        token_indices.extend(word_to_tokens[i][word_idx])
-                    ablated_input = primary_tokens["input_ids"].clone()
-                    for idx in token_indices:
-                        ablated_input[0, idx] = baselines[0, idx]
-                    batch_id_indices.append(token_indices)
-                    batch_ablated_inputs.append(ablated_input)
+                try:
+                    for index,i_word in enumerate(word_iterator):
+                        # Get the words for this batch
+                        if self.regex_condition:
+                            end = min(index + batch_size, len(word_iterator)-1)
+                            batch_word_indices= list(range(i_word, word_iterator[end]))                        
+                        else:
+                            batch_word_indices= list(range(i_word, min(i_word+batch_size, num_words)))
+                        token_indices=[]
+                        for word_idx in batch_word_indices:
+                            # Create an ablated input by replacing tokens in the word with baseline
+                            token_indices.extend(word_to_tokens[i][word_idx])
+                        ablated_input = primary_tokens["input_ids"].clone()
+                        for idx in token_indices:
+                            ablated_input[0, idx] = baselines[0, idx]
+                        batch_id_indices.append(token_indices)
+                        batch_ablated_inputs.append(ablated_input)
+                except Exception as e :
+                    print(e)
                 # Forward pass with ablated inputs
                 for i_abla,ablated_input in enumerate(batch_ablated_inputs):
                         # Stack ablated inputs for batch processing

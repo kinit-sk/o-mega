@@ -539,9 +539,19 @@ class Compare_docano_XAI:
         if post_claim_pair['post_rationale']:
             post_dic=post_claim_pair['post_rationale']
         if post_claim_pair['ocr_rationale']:
-            ocr=post_claim_pair['ocr_rationale'][0]
-            if isinstance(ocr,list):
-                ocr=ocr[0]
+            if len(post_claim_pair['ocr_rationale']) == 1:
+                ocr=post_claim_pair['ocr_rationale'][0]
+            else:
+                ocr = {
+                    'interpretable_tokens': post_claim_pair['ocr_rationale'][0]['interpretable_tokens'],
+                    'tokens': [],
+                    'mask': []
+                }
+                for item in post_claim_pair['ocr_rationale']:
+                    ocr['tokens'].extend(item['tokens'])
+                    ocr['mask'].extend(item['mask'])
+
+
         if 'tokens' in post_dic and 'tokens' in ocr:
             post_doccano=post_dic['tokens']+ocr['tokens']
             mask=post_dic['mask']+ocr['mask']
@@ -677,7 +687,7 @@ class Compare_docano_XAI:
             expl_dict['mask']=mask
             new_importance_map.append(expl_dict)
         return new_importance_map
-    
+
 
     #set mask for tokens 
     def concise_word_mask(post,mask,tokenizer):
@@ -703,8 +713,8 @@ class Compare_docano_XAI:
                 if list(mask.size())[0] != list(explanations[i]['explanation'][method][0].size())[1]:
                     post=dataset[i][1]
                     mask=Compare_docano_XAI.concise_word_mask(post,mask,tokenizer)
-            if list(mask.size())[0] > 510: 
-                mask = mask[:510]
+            if list(mask.size())[0] > tokenizer.max_len_single_sentence: 
+                mask = mask[:tokenizer.max_len_single_sentence]
             if explanations[i]['explanation'][method][0].squeeze().size()[0] != mask.size()[0]:
                 # if mask.size()[0] < explanations[i]['explanation'][method][0].squeeze().size()[0]
                 print(f"{explanations[i]['explanation'][method][0].squeeze().size()[0]}:{mask.size()[0]}")
@@ -717,7 +727,7 @@ class Compare_docano_XAI:
                 sig_number=None,best_percent=None,         
                 percentage_metrics=None,
                 evaluation_metrics=None,
-
+                additional_metrics=[],
                 normalization=None,
                 ) -> pd.DataFrame:
         """
@@ -793,6 +803,9 @@ class Compare_docano_XAI:
                 # row[f'var-{method}'] = variance.item()
                 # xai_tensor.to('cpu')
                 try: 
+                    if torch.isnan(xai_tensor).any():
+                        min_val = xai_tensor[~torch.isnan(xai_tensor)].min()
+                        xai_tensor = torch.nan_to_num(xai_tensor,nan = min_val-1e-10)
                     mask.to(utils.get_device())
                     row[f'avg_prec_score-{method}']= average_precision_score(mask, xai_tensor)
                 except Exception as e :
@@ -800,7 +813,6 @@ class Compare_docano_XAI:
                     print(e)
                     continue
                 #Gini index
-
 
                 # print('---')
                 if min(xai_tensor) < 0:
@@ -814,19 +826,24 @@ class Compare_docano_XAI:
                 indices = torch.arange(1, n + 1, dtype=torch.float32)
                 indices=indices.to(utils.get_device())
                 sorted_tensor=sorted_tensor.to(utils.get_device())
-                try:
-                    gini = float(torch.sum((2 * indices - n - 1) * sorted_tensor) / (n * torch.sum(sorted_tensor)))
-                    row[f'gini-{method}']=gini
-                except Exception as e:
-                    gini=0
-                    row[f'gini-{method}']=gini
-                    print(e)
-                spare=Compare_docano_XAI.gini_f(xai_tensor)
-                row[f'spareness-{method}']=spare
-                local=Compare_docano_XAI.localization(xai_tensor,mask)
-                row[f'localization-{method}']=local
-                points=Compare_docano_XAI.point_game_f(xai_tensor,mask)
-                row[f'point_game-{method}']=points
+
+                if 'gini' in additional_metrics:
+                    try:
+                        gini = float(torch.sum((2 * indices - n - 1) * sorted_tensor) / (n * torch.sum(sorted_tensor)))
+                        row[f'gini-{method}']=gini
+                    except Exception as e:
+                        gini=0
+                        row[f'gini-{method}']=gini
+                        print(e)
+                if 'spareness' in additional_metrics:
+                    spare=Compare_docano_XAI.gini_f(xai_tensor)
+                    row[f'spareness-{method}']=spare
+                if 'localization' in additional_metrics:
+                    local=Compare_docano_XAI.localization(xai_tensor,mask)
+                    row[f'localization-{method}']=local
+                if 'point_game' in additional_metrics:
+                    points=Compare_docano_XAI.point_game_f(xai_tensor,mask)
+                    row[f'point_game-{method}']=points
                 # print(f"Quantum implemented spareness {gini}")
 
                 # frac_con_dis= xai_tensor/torch.abs(xai_tensor).sum()             # https://arxiv.org/pdf/2005.00631
@@ -1058,6 +1075,10 @@ class Hyper_optimalization:
             self.method_param=method_param
             self.explanations_path=explanations_path
             self.multiple_object=multiple_object
+            allowed_metrics = ['localization', 'point_game', 'spareness', 'gini']
+            if additional_metric is not None:
+                assert all(m in allowed_metrics for m in additional_metric), \
+                    f"All additional_metric values must be in {allowed_metrics}"
             self.additional_metric=additional_metric
             self.additional_metric_weight=additional_metric_weight
             self.explanation_maps_word= explanation_maps_word
@@ -1119,16 +1140,15 @@ class Hyper_optimalization:
 
             multiple_object: Setting Optuna evaluation into the multi-objective or single-objective 
                              For evaluation of explanaitons we utilize two types of evaluation metrics: faithfullness and plausability
-                             Multiple_object= True  Optuna make average between used types of metrics and result will be 1 integer 
-                             Multiple_object= False Optuna return 2 integers (faithfulness,plausability)
+                             Multiple_object= True Optuna return 2 integers (faithfulness,plausability) 
+                             Multiple_object= False Optuna make average between used types of metrics and result will be 1 integer 
 
             faithfulness_weight, plausability_weight: Weights for final results  
                                                       Must be multiple_object=False
                                                       Sum of values must be 1. 
 
-            additional_metric, additional_metric_weight: Additionial computation metrics: ['localization','point_game','spareness']
+            additional_metric, additional_metric_weight: Additionial computation metrics: ['localization','point_game','spareness','gini']
                                                          Sum of all 3 weights must be 1.
-
             """
 
         def process_input_dataset(self,dataset:OurDataset):
@@ -1153,12 +1173,7 @@ class Hyper_optimalization:
                 length_dataset=round(length_dataset)
                 dataset.fact_check_post_mapping=dataset.fact_check_post_mapping[:length_dataset]
                 return None,dataset 
-
-            # if isinstance(self.explanations_path,str) and os.path.exists(self.explanations_path) and os.stat(self.rationale_path).st_size == 0:
-            #     explanations=check.exist_maps_json(self.explanations_path)
-                # explanations=check.exist_maps(self.explanations_path,list_methods=self.methods)
-                # return doc_data,dataset,indexes_xai,explanations       #Toto sa vymaze lebo sa z jsonu bude loadovat
-        
+       
 
 
 
@@ -1224,10 +1239,11 @@ class Hyper_optimalization:
         
             return all_combinations
         @staticmethod
-        def load_explanations(explanations_path,method_param,model_param,method,explanations):
+        def load_explanations(explanations_path,method_param,model_param,method):
             """
             Load explanation with specific model and method parameters
             """
+            matched_explanations = []
             try:    
                 with open(explanations_path, 'r', encoding="utf-8") as file:
                     existing_data = json.load(file)
@@ -1253,10 +1269,10 @@ class Hyper_optimalization:
                         # claim_exp=torch.tensor(exp['explanation'][method][1]).to(utils.get_device())
                         exp['explanation'][method]=(torch.tensor(exp['explanation'][method][0]),# , dtype=torch.float64
                                                     torch.tensor(exp['explanation'][method][1])) #, dtype=torch.float64
-                        explanations.extend([exp])
+                        matched_explanations.extend([exp])
                 except:
                     print('')
-            return explanations
+            return matched_explanations
         
         def load_explanations_ids(explanations):
             list_ids=[]
@@ -1404,16 +1420,18 @@ class Hyper_optimalization:
                                 return forward_function
                     except:
                         print('')
-                def com_simil(model, tokenizer, text, method,forward_function): # here need to change 
+                def com_simil(model, tokenizer, text, method,forward_function,model_param): # here need to change 
                     cls_method=globals()[method]
                     if method== 'GAE_Explain':
-                        module_paths_to_hook = ["hf_transformer.encoder.layer.*.attention.self.dropout"]
-                        explain_class = cls_method(module_paths_to_hook,apply_normalization=False)
+                        assert 'layers' in model_param[method], "'Layers' parameter is not available"
+                        explain_class = cls_method(**model_param[method]['layers'],apply_normalization=False)
                     if method=='ConservativeLRP':
-                        store_A_path_expressions = ["hf_transformer.embeddings"]
-                        attent_path_expressions = ["hf_transformer.encoder.layer.*.attention.self.dropout"]
-                        norm_layer_path_expressions = ["hf_transformer.embeddings.LayerNorm","hf_transformer.encoder.layer.*.attention.output.LayerNorm","hf_transformer.encoder.layer.*.output.LayerNorm"]
-                        explain_class = cls_method(store_A_path_expressions, attent_path_expressions, norm_layer_path_expressions,apply_normalization=False)
+                        assert 'layers' in model_param[method], "'Layers' parameter is not available"
+                        # layers= {'store_A_path_expressions':["hf_transformer.embeddings"],'attent_path_expressions':['hf_transformer.encoder.layer.*.attention.self.dropout'],'norm_layer_path_expressions':["hf_transformer.embeddings.LayerNorm","hf_transformer.encoder.layer.*.attention.output.LayerNorm","hf_transformer.encoder.layer.*.output.LayerNorm"]}
+                        # store_A_path_expressions = ["hf_transformer.embeddings"]
+                        # attent_path_expressions = ["hf_transformer.encoder.layer.*.attention.self.dropout"]
+                        # norm_layer_path_expressions = ["hf_transformer.embeddings.LayerNorm","hf_transformer.encoder.layer.*.attention.output.LayerNorm","hf_transformer.encoder.layer.*.output.LayerNorm"]
+                        explain_class = cls_method(**model_param[method]['layers'],apply_normalization=False)
                     explain_class.prepare_model(model)
                     explanation, predictions = explain_class._explain_batch(model, tokenizer, text,forward_function=forward_function)
                     explain_class.cleanup()
@@ -1424,9 +1442,9 @@ class Hyper_optimalization:
                     post_enc = tokenizer(post, return_tensors="pt").to(utils.get_device())
                     if not method== 'Occlusion_word_level':
                         forward_function=foward_fun(claim_enc)
-                        post_explanation, _=com_simil(model, tokenizer, post,method,forward_function,method_param)
+                        post_explanation, _=com_simil(model, tokenizer, post,method,forward_function,model_param)
                         forward_function=foward_fun(post_enc)
-                        claim_explanation, _=com_simil(model, tokenizer, claim,method,forward_function,method_param)
+                        claim_explanation, _=com_simil(model, tokenizer, claim,method,forward_function,model_param)
                     else:
                         cls_method=globals()[method]
                         occl_class= cls_method(tokenizer=tokenizer,model=model,forward_func=model.forward_tokens,**method_param[method]['parameters']) 
@@ -1475,7 +1493,7 @@ class Hyper_optimalization:
             if len(self.dataset) == 0: 
                 raise ValueError('Dataset is empty. Please load the dataset.')
             # creating explantions
-            explanations_already_exist =Hyper_optimalization.load_explanations(self.explanations_path,method_param,model_param,method,explanations)
+            explanations_already_exist =Hyper_optimalization.load_explanations(self.explanations_path,method_param,model_param,method)
             id_list=Hyper_optimalization.load_explanations_ids(explanations_already_exist)
             for i in range(0,len(self.dataset)):
                 claim,post,ids= self.dataset.getitem_with_ids(i)
@@ -1779,7 +1797,8 @@ class Hyper_optimalization:
                     add_metrics=['avg_prec_score']+self.additional_metric
                 else: 
                     add_metrics=['avg_prec_score']
-                add_metrics=add_metrics+['localization','point_game','spareness']
+                if self.additional_metric:
+                    add_metrics=add_metrics+self.additional_metric
                 eval_values=self.filter_evaluation(df,add_metrics)
 
 
@@ -2042,7 +2061,7 @@ class Visualization_opt:
         ax.text(x_min+0.1, empty_post_cs - 0.027, x_axis_comment[0], ha='left', va='top', fontsize=12)
         ax.text(x_max-0.1, empty_post_cs - 0.027, x_axis_comment[1], ha='right', va='top', fontsize=12)
         if save_path_plot:
-            plt.savefig(f"{save_path_plot}/{vis_list[0]['metric']}.png")
+            plt.savefig(f"{save_path_plot}_{vis_list[0]['metric']}.png")
         plt.show()
         plt.close() 
 

@@ -42,9 +42,20 @@ class AOPC_Evaluation(BaseEvaluator):
             input_ids = enc_text["input_encodings"]["input_ids"][0][:input_len].tolist()
             tokenizer=get_tokenizer(model_wrapper)
             input_ids = [token_id for token_id in input_ids if token_id not in set(tokenizer.all_special_ids)]
-            # input_ids = input_ids[:-1]
-            # score_explanation = score_explanation[:-1]
             full_discrete_expl_ths = []
+            # If tokens where not right excluded, (for security/sanity check)
+            if word_evaluation== False and sentence_evaluation== False:
+                if explanation.scores.size != len(input_ids):
+                    a = enc_text["input_encodings"]["input_ids"][0][:input_len].tolist()
+                    ids_special_tokens= [idx for idx, token_id in enumerate(a) if token_id in set(tokenizer.all_special_ids)]
+                    for id in ids_special_tokens:
+                        explanation.scores=np.delete(explanation.scores, id)
+                        if explanation.scores.size == len(input_ids):
+                            score_explanation = explanation.scores
+                            break
+
+
+            # print()
             id_tops = []
             get_discrete_rationale_function = (
                 _check_and_define_get_id_discrete_rationale_function(
@@ -100,6 +111,7 @@ class AOPC_Evaluation(BaseEvaluator):
                             discrete_expl_ths.append(discrete_expl_th)
                     except Exception as e :
                         print(e)
+                        print("Error")
                 full_discrete_expl_ths.append(discrete_expl_ths)
             if (full_discrete_expl_ths[0]==[] and self.SHORT_NAME == 'aopc_suff') or (full_discrete_expl_ths[1]==[] and self.SHORT_NAME == 'aopc_compr'):
                 # TODO it looks like this value is also obtained if we've only negative attributions as explanation 

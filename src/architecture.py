@@ -187,7 +187,8 @@ class Basic_RepresentationModel(torch.nn.Module, RepresentationModel):
 
     def _forward(self, encodings: dict[str, torch.Tensor]) -> torch.Tensor:
         kwargs = encodings["input_encodings"]
-
+        if 'token_type_ids' in kwargs:
+            del kwargs['token_type_ids']
         out = self.transformer(**kwargs)[0]
         out = _pool(out, kwargs["attention_mask"], self.pooling)
         return out

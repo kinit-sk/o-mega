@@ -1,12 +1,12 @@
 Hyperoptimalization_parameters:
- rationale_path: "./notebooks/tmp/Jaro_574_human_rational_tokens.json"
- explanations_path: "./notebooks/tmp/test_explain_new_model.json"
+ rationale_path: "./data/annotations/rationale.json"
+ explanations_path: "./notebooks/tmp/explain_multilingual_e5_model.json" # here are saving created explanations
+                                                                         # do not create a json file, it will create itself
  dataset: "./notebooks/data"
- perc: 1
+ perc: 100
  model_path: "intfloat/multilingual-e5-large"
  embeddings_module_name: "embeddings.word_embeddings"
  methods: ["GAE_Explain","Occlusion","Input X Gradient","Guided Backprop","Feature Ablation","Kernel Shap","Gradient Shap","Lime","Saliency","ConservativeLRP"]
-#  methods: ['Saliency']
  normalizations: ["without_normalize"]
  explanation_maps_token: True
  plausability_weight: 0.5
@@ -18,24 +18,30 @@ Hyperoptimalization_parameters:
      similarity_func:
        function_name:
          - captum.attr._core.lime.get_exp_kernel_similarity_function
-         - captum.attr._core.lime.default_perturb_func
        parameters:
          distance_mode: ["cosine", "euclidean"]
          kernel_width: [450, 750]
      interpretable_model:
        function_name:
          - captum._utils.models.linear_model.SkLearnLasso
-         - captum._utils.models.linear_model.LinearModel
        parameters:
          alpha: [1e-19, 1e-25]
-   LayerGradientXActivation:
-     layer:
-       - [model.get_embedding_layer]
-     multiply_by_inputs: true
    GAE_Explain:
      implemented_method: true
+     layers:
+       module_path_expressions:
+         - "hf_transformer.encoder.layer.*.attention.self.dropout"
    ConservativeLRP:
      implemented_method: true
+     layers:
+       store_A_path_expressions:
+         - "hf_transformer.embeddings"
+       attent_path_expressions:
+         - "hf_transformer.encoder.layer.*.attention.self.dropout"
+       norm_layer_path_expressions:
+         - "hf_transformer.embeddings.LayerNorm"
+         - "hf_transformer.encoder.layer.*.attention.output.LayerNorm"
+         - "hf_transformer.encoder.layer.*.output.LayerNorm"
    Occlusion_word_level:
      implemented_method: true
  
@@ -81,13 +87,12 @@ Hyperoptimalization_parameters:
    Integrated Gradients:
      parameters:
        n_steps: [60, 40]
-   LayerGradientXActivation: {}
 
 Optuna_parameters: 
  sampler: "BruteForceSampler"
  n_trials: 1
 
 Results_parameters:
- table_counter: './tmp/count_tables/e5/without_norm/baseline_counter.csv'
- table_sampler: './tmp/result_sampler/e5/without_norm/baseline_sampler.csv'
- visual_aopc: './tmp/plots_methods/e5/without_norm_specific_set'
+ table_counter: './notebooks/results/count_tables/baseline_counter.csv'
+ table_sampler: './notebooks/results/sampler_tables/baseline_sampler.csv'
+ visual_aopc: './notebooks/results/aopc_plots/'
