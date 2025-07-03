@@ -1,7 +1,10 @@
 .vscode
 __pycache__
 .ipynb_checkpoints
-data
+/data/
+!notebooks/data/
+notebooks/data/*
+!notebooks/data/.gitkeep
 models
 temp
 tmp

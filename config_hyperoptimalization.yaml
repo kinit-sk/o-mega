@@ -89,8 +89,10 @@ Hyperoptimalization_parameters:
        n_steps: [60, 40]
 
 Optuna_parameters: 
- sampler: "BruteForceSampler"
- n_trials: 1
+ sampler: "TPESampler"
+ n_trials: 14
+ n_startup_trials: 4
+ seed: 1000
 
 Results_parameters:
  table_counter: './notebooks/results/count_tables/baseline_counter.csv'
