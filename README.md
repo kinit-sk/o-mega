@@ -132,10 +132,10 @@ The `method_param` dictionary contains method-specific parameters that control h
 # Notebooks examples
 
 On path `notebooks/`, we've prepared a few example notebooks that contain the main logic how to work with this repository. To be precise we've created following Jupyter notebooks:
-- `xai.ipynb`, `xai_quant_evaluation.ipynb`, `xai_qual_evaluation.ipynb` - for working with captum XAI attribution methods and for their further evaluation
-- `task_evaluation.ipynb` - for evaluating transformer on the task of PFCR (database of claims, query is a post) or invPFCR (database of posts, query is a claim)
+- `xai_quant_evaluation.ipynb`, `xai_qual_evaluation.ipynb` - for working with captum XAI attribution methods and for their further evaluation
 - `annotation_creation.ipynb`, `annotation_parsing.ipynb` - for creating annotations for Doccano and their further interpretation to a binary mask representing human rationale
-- `hyper_param.ipynb` - for selection of the best normalizations and explanation methods 
+- `hyper_param.ipynb` - for selection of the best normalizations and explanation methods
+- `results_analysis.ipynb` - for loading results from results folder
 
 <br />
 <br />

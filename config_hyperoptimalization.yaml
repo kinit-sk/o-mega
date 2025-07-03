@@ -1,7 +1,6 @@
 Hyperoptimalization_parameters:
  rationale_path: "./data/annotations/rationale.json"
- explanations_path: "./notebooks/tmp/explain_multilingual_e5_model.json" # here are saving created explanations
-                                                                         # do not create a json file, it will create itself
+ explanations_path: "./notebooks/results/explain_multilingual_e5_model.json"
  dataset: "./notebooks/data"
  perc: 100
  model_path: "intfloat/multilingual-e5-large"
