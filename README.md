@@ -36,19 +36,6 @@ The previous script creates the following important artifacts necessary for furt
 After having preprocessed the data, you may call OurDataset constructor to instantiate training or test subset that is used for either 
 training the O-MEGA pipeline or for further XAI algorithm evaluation. 
 
-```
-    from dataset import OurDataset
-    from torch.utils.data import DataLoader
-
-    # Training subset
-    train_ds = OurDataset(csv_dirpath="./notebooks/data", split="train")
-    train_loader = DataLoader(train_ds)
-
-    # Testing subset
-    test_ds = OurDataset(csv_dirpath="./notebooks/data", split="test")
-    test_loader = DataLoader(test_ds)
-```
-
 | Subset    | Subset Size |
 | --------- | ----------- |
 | Train     | 5108        |
@@ -59,30 +46,6 @@ training the O-MEGA pipeline or for further XAI algorithm evaluation.
 
 1. Download all the files (the entire directory) found on link corresponding to the fine-tuned model trained on multiclaim dataset. [LINK](https://drive.google.com/drive/folders/1PyCXoJBIi7zu26_HVSOORRK1pF6DNToT)
 1. Move the directory into the following path: `models/GTR-T5-FT`
-1. If you have correctly placed the said directory, invoking the SentenceTransformer constructor with the model path and path to embedding layer should correctly instatiate the model.
-
-    ```
-    # Check whether you've correctly placed the model data into the codespace
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer("./models/GTR-T5-FT","encoder.embed_tokens")
-    ```
-#### Optional: 
-It is a possibility to load models from Huggingface. List of models:
-| Model name | Embedding layer |
-|-----------------------------------------------|--------------------------|
-| sentence-transformers/gtr-t5-large            | encoder.embed_tokens      |
-| sentence-transformers/gtr-t5-xl               | encoder.embed_tokens      |
-| sentence-transformers/sentence-t5-xl          | encoder.embed_tokens      |
-| sentence-transformers/all-mpnet-base-v2       | embeddings.word_embeddings |
-| sentence-transformers/multi-qa-mpnet-base-cos-v1 | embeddings.word_embeddings |
-| intfloat/multilingual-e5-large                | embeddings.word_embeddings |
-| sentence-transformers/all-MiniLM-L12-v2       | embeddings.word_embeddings |
-| BAAI/bge-large-en-v1.5                        | embeddings.word_embeddings |
-| BAAI/bge-base-en-v1.5                         | embeddings.word_embeddings |
-| BAAI/bge-small-en-v1.5                        | embeddings.word_embeddings |
-| llmrails/ember-v1                             | embeddings.word_embeddings |
-| thenlper/gte-large                            | embeddings.word_embeddings |
-| intfloat/e5-large-v2                          | embeddings.word_embeddings |
 
 ## O-MEGA pipeline - Optimization 
 Run of O-MEGA pipeline can be with run_opti.py and yaml file (./config_hyperoptimalization.yaml) for a setting hyperparameters. 
@@ -99,20 +62,40 @@ Second option is jupyter notebook on path `./notebooks/hyper_param.ipynb`
 ### Setting parameters 
 
 Hyperoptimalization creates the possibility of finding the best combination of normalization and explanation method with specific hyperparameters . Using the `Hyper_optimalization` class and the `Hyper_optimalization.run_optimalization()` function, we can use optimalization algorithms from the [Optuna](https://optuna.readthedocs.io/en/stable/reference/samplers/index.html) library to speed up the process of finding the best combination of explainability and normalization methods. Class `Hyper_optimalization` set up several parameters neccesery for evaluation:
+
+#### Config_hyperoptimalization.yaml
+- `model_path` and `embeddings_module_name`: (string) Specific path of model loaded from and their embedding layer 
 - `methods`: (list(string)) methods which will be computed. 
 - `normalization`: (list(string)) Normalizations which will be used to normalize explanations. Normalizations must be same as names of functions in `Compare_docano_XAI` class.
-- `rationale_path`: (string) path to rationales. Without rationales is not able to do plausibility metrics. 
+- `rationale_path`: (string) Path to rationales. Without rationales is not able to do plausibility metrics. 
 - `dataset`: (OurDataset) Load dataset with posts and claims
-- `model_path` and `embeddings_module_name`: (string) Specific path of model loaded from and their embedding layer 
-- `exlanations_path`: (string) path where will be saved and loaded already created explanations
+- `exlanations_path`: (string) Path where will be saved and loaded already created explanations
 - `plausibility_weights` and `faithfulness_weights`:(float) Weights for groups of metrics (plausibility_weights+faithfulness_weights=1)
-- `model_param` and `method_param`: (dict) select specific set of possible hyperparameters
+- `model_param` and `method_param`: (dict) Select specific set of possible hyperparameters
 - `explanation_maps_token`, `explanation_maps_word`,`explanation_maps_sentence` : (boolean) Define on which level are explanations post-processed
 - `multiple_object`: (boolean) Set Optuna hyperoptimalization to multiple-objective (plausability,faithfulness) optimalization
 
 After creation of explanations, explanations can be post-processed into interpretable_embeddings (`explanation_maps_word`=True) and sentences (`explanation_maps_sentence`=True). Unfortunately, you are able create only one type of explanations during hyperoptimalization. 
 
-### Setting model and method parameters
+#### Optional: 
+It is a possibility to load models from Huggingface. List of models:
+| model_path | embeddings_module_name |
+|-----------------------------------------------|--------------------------|
+| sentence-transformers/gtr-t5-large            | encoder.embed_tokens      |
+| sentence-transformers/gtr-t5-xl               | encoder.embed_tokens      |
+| sentence-transformers/sentence-t5-xl          | encoder.embed_tokens      |
+| sentence-transformers/all-mpnet-base-v2       | embeddings.word_embeddings |
+| sentence-transformers/multi-qa-mpnet-base-cos-v1 | embeddings.word_embeddings |
+| intfloat/multilingual-e5-large                | embeddings.word_embeddings |
+| sentence-transformers/all-MiniLM-L12-v2       | embeddings.word_embeddings |
+| BAAI/bge-large-en-v1.5                        | embeddings.word_embeddings |
+| BAAI/bge-base-en-v1.5                         | embeddings.word_embeddings |
+| BAAI/bge-small-en-v1.5                        | embeddings.word_embeddings |
+| llmrails/ember-v1                             | embeddings.word_embeddings |
+| thenlper/gte-large                            | embeddings.word_embeddings |
+| intfloat/e5-large-v2                          | embeddings.word_embeddings |
+
+#### Setting model and method parameters
 
 Setting Hyperparameters describes the `model_param` and `method_param` dictionaries used in the Hyper_optimalization class as variables for configuring explanation methods and their parameters. 
 
