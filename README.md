@@ -1,6 +1,6 @@
 # O-MEGA-pipeline
 In this repository we validate the idea of automating the XAI algorithm selection by executing the O-MEGA pipeline 
-on a claim matching (PFCR) task. For this particular task we use our [multiclaim](https://arxiv.org/abs/2305.07991) dataset that contains a database of various social posts 
+on a post claim matching (PFCR) task. For this particular task we use our [multiclaim](https://arxiv.org/abs/2305.07991) dataset that contains a database of various social posts 
 with their corresponding fact checks that either further acknowledge or disprove claims found in the posts. 
 In this work, we solely work with English version of this dataset.
 
