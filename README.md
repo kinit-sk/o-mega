@@ -1,6 +1,4 @@
 # O-MEGA-pipeline
-*This repository contains scripts created for automizing the process of searching an optimal XAI algorithm based on quantitative metrics*
-
 In this repository we validate the idea of automating the XAI algorithm selection by executing the O-MEGA pipeline 
 on a claim matching (PFCR) task. For this particular task we use our [multiclaim](https://arxiv.org/abs/2305.07991) dataset that contains a database of various social posts 
 with their corresponding fact checks that either further acknowledge or disprove claims found in the posts. 
@@ -33,14 +31,6 @@ The previous script creates the following important artifacts necessary for furt
 - `notebooks/data/posts.csv`, `notebooks/data/fact_checks.csv`, `notebooks/data/fact_check_post_mapping.csv` files representing clean multiclaim dataset
 - `data/annotations/rationale.json` file representing all the user rationale gathered from all other rationale JSON files
 
-After having preprocessed the data, you may call OurDataset constructor to instantiate training or test subset that is used for either 
-training the O-MEGA pipeline or for further XAI algorithm evaluation. 
-
-| Subset    | Subset Size |
-| --------- | ----------- |
-| Train     | 5108        |
-| Test      | 1278        |
-
 
 ### Model preprocessing
 
@@ -48,7 +38,7 @@ training the O-MEGA pipeline or for further XAI algorithm evaluation.
 1. Move the directory into the following path: `models/GTR-T5-FT`
 
 ## O-MEGA pipeline - Optimization 
-Run of O-MEGA pipeline can be with run_opti.py and yaml file (./config_hyperoptimalization.yaml) for a setting hyperparameters. 
+Run of O-MEGA pipeline can be with run_opti.py and yaml file (`./config_hyperoptimalization.yaml`) for a setting hyperparameters. 
 
 1. First, follow the instructions in [Repo setup](#Repo-setup) section
 1. Setup specific parameters in `config_hyperoptimalization.yaml`
@@ -71,7 +61,7 @@ Hyperoptimalization creates the possibility of finding the best combination of n
 - `dataset`: (OurDataset) Load dataset with posts and claims
 - `exlanations_path`: (string) Path where will be saved and loaded already created explanations
 - `plausibility_weights` and `faithfulness_weights`:(float) Weights for groups of metrics (plausibility_weights+faithfulness_weights=1)
-- `model_param` and `method_param`: (dict) Select specific set of possible hyperparameters
+- `model_param` and `method_param`: (dict[list] or dict[]) Use these to specify sets of possible hyperparameters for models and methods, respectively.
 - `explanation_maps_token`, `explanation_maps_word`,`explanation_maps_sentence` : (boolean) Define on which level are explanations post-processed
 - `multiple_object`: (boolean) Set Optuna hyperoptimalization to multiple-objective (plausability,faithfulness) optimalization
 
