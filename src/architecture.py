@@ -484,7 +484,30 @@ def weighted_sum_pooling(
 
 def get_tokenizer(model
                   )-> PreTrainedTokenizer:
-    if type(model).__name__ == 'STS_ExplainWrapper':
+    if type(model).__name__ in ['STS_ExplainWrapper','ClassificationWrapper']:
         return model.model.tokenizer
     else: 
         return model.tokenizer
+
+
+
+
+
+    # def compute_baseline_PCM(explanation,helper,sentence_evaluation):
+    #     input_text = explanation.input_text
+    #     ctx_text = explanation.ctx_text
+    #     score_explanation = explanation.scores
+    #     model_wrapper = helper.model.model # Basic_RepresentationModel()
+    #     enc_text = model_wrapper.preprocess_input(input_text)
+    #     enc_ctx = model_wrapper.preprocess_input(ctx_text)
+    #     if sentence_evaluation:
+    #         sample=divide_text_to_sentences(input_text)
+    #     with torch.no_grad():
+    #         emb_ctx = model_wrapper._forward(enc_ctx)
+    #         baseline = helper.model(enc_text["input_encodings"]["input_ids"], "input_ids", emb_ctx, additional_forward_kwargs=enc_text)
+    #         baseline = (baseline + 1) / 2
+    #     return baseline
+    
+    # def compute_baseline_TC(explanation,helper,sentence_evaluation):
+    #     baseline=None
+    #     return baseline

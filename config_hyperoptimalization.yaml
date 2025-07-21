@@ -1,8 +1,14 @@
 Hyperoptimalization_parameters:
- rationale_path: "./data/annotations/rationale.json"
- explanations_path: "./notebooks/results/explain_multilingual_e5_model.json"
+ rationale_path: "./notebooks/tmp/Jaro_574_human_rational_tokens.json"
+ explanations_path: "./notebooks/tmp/test.json"
+ task: 'post_claim_matching' # 'text_classification'
  dataset: "./notebooks/data"
- perc: 100
+#  dataset: "llangnickel/long-covid-classification-data" 
+#  num_classes=6,
+#  columns:  # If you want 'post_claim_matching', delete columns variable 
+#  - text
+#  - label
+ perc: 1
  model_path: "intfloat/multilingual-e5-large"
  embeddings_module_name: "embeddings.word_embeddings"
  methods: ["GAE_Explain","Occlusion","Input X Gradient","Guided Backprop","Feature Ablation","Kernel Shap","Gradient Shap","Lime","Saliency","ConservativeLRP"]
@@ -61,9 +67,6 @@ Hyperoptimalization_parameters:
          - [1, 1024]
          - [1, 512]
      compute_baseline: true
-   Input X Gradient: {}
-   Guided Backprop: {}
-   Deconvolution: {}
    Gradient Shap:
      parameters:
        stdevs: [0.1, 0.9]
@@ -76,8 +79,6 @@ Hyperoptimalization_parameters:
    Feature Ablation:
      token_groups_for_feature_mask: true
      compute_baseline: true
-   GAE_Explain: {}
-   ConservativeLRP: {}
    Occlusion_word_level:
      parameters:
        regex_condition:
@@ -95,5 +96,5 @@ Optuna_parameters:
 
 Results_parameters:
  table_counter: './notebooks/results/count_tables/baseline_counter.csv'
- table_sampler: './notebooks/results/sampler_tables/baseline_sampler.csv'
+ table_sampler: './notebooks/results/sampler_tables/baseline_sampler.csv' 
  visual_aopc: './notebooks/results/aopc_plots/'

@@ -17,27 +17,47 @@ from architecture import get_tokenizer
 import matplotlib.pyplot as plt
 import numpy as np
 
+
 class AOPC_Evaluation(BaseEvaluator):
     def __init__(self, model: STS_ExplainWrapper, tokenizer: PreTrainedTokenizer):
         super().__init__(model, tokenizer)
+    @staticmethod
+    def forward_PCM(helper,enc_text,emb_ctx):
+        with torch.no_grad():
+            predictions = helper.model(enc_text["input_encodings"]["input_ids"], "input_ids", emb_ctx, additional_forward_kwargs=enc_text)
+            predictions = (predictions + 1) / 2
+            return predictions 
+    @staticmethod
+    def forward_TC(helper,enc_text,ctx_text):
+        with torch.no_grad():
+            predictions = helper.model(enc_text["input_encodings"]["input_ids"], "input_ids", additional_forward_kwargs=enc_text)
+            predictions=predictions[:,ctx_text.tolist()]  
+            return predictions 
 
-    def compute_evaluation(self, explanation: Explanation, aopc_func, word_evaluation,sentence_evaluation,**evaluation_args):
+    def compute_evaluation(self, explanation: Explanation, aopc_func, word_evaluation,sentence_evaluation,task,**evaluation_args):
             _, only_pos, removal_args, _ = parse_evaluator_args(
                 evaluation_args
             )
             input_text = explanation.input_text
             ctx_text = explanation.ctx_text
             score_explanation = explanation.scores
-            model_wrapper = self.helper.model.model
-            enc_text = model_wrapper.preprocess_input(input_text)
-            enc_ctx = model_wrapper.preprocess_input(ctx_text)
+            model_wrapper = self.helper.model.model # Basic_RepresentationModel()
+            enc_text = model_wrapper.preprocess_input(input_text) #'input_encodings':{input_ids,attention_mask}
+
+            if task == 'post_claim_matching':
+                enc_ctx = model_wrapper.preprocess_input(ctx_text)
+                # with torch.no_grad():
+                emb_ctx = model_wrapper._forward(enc_ctx)
+                fowr_function=AOPC_Evaluation.forward_PCM
+                target=emb_ctx 
+            if task == 'text_classification':
+                fowr_function=AOPC_Evaluation.forward_TC
+                target= ctx_text
 
             if sentence_evaluation:
                 sample=divide_text_to_sentences(input_text)
-            with torch.no_grad():
-                emb_ctx = model_wrapper._forward(enc_ctx)
-                baseline = self.helper.model(enc_text["input_encodings"]["input_ids"], "input_ids", emb_ctx, additional_forward_kwargs=enc_text)
-                baseline = (baseline + 1) / 2
+            # with torch.no_grad():
+            baseline = fowr_function(self.helper,enc_text,target)
             input_len = enc_text["input_encodings"]["attention_mask"].sum().item()
             input_ids = enc_text["input_encodings"]["input_ids"][0][:input_len].tolist()
             tokenizer=get_tokenizer(model_wrapper)
@@ -64,7 +84,7 @@ class AOPC_Evaluation(BaseEvaluator):
             )
             thresholds = removal_args["thresholds"]
             last_id_top = None
-            full_discrete_expl_ths = []
+            full_discrete_expl_ths = [] # HERE: doplnit pre aopc
             if self.SHORT_NAME=='aopc_suff':
                 combination_exp=[score_explanation,-score_explanation]
             else:
@@ -73,7 +93,7 @@ class AOPC_Evaluation(BaseEvaluator):
                 discrete_expl_ths = []
                 for v in thresholds:
                     # Get rationale from score explanation
-                    id_top = get_discrete_rationale_function(score_exp, v, only_pos)
+                    id_top = get_discrete_rationale_function(score_exp, v, only_pos) #numpy.ndarray nd1
                     # If the rationale is the same, we do not include it. In this way, we will not consider in the average the same omission.
                     if (
                         id_top is not None
@@ -124,15 +144,14 @@ class AOPC_Evaluation(BaseEvaluator):
             # FORWARD FUNC ----
             for discrete_expl_ths in full_discrete_expl_ths:
                 if discrete_expl_ths:
+                    # with torch.no_grad():
                     enc_new_texts = model_wrapper.preprocess_input(discrete_expl_ths)
-                    with torch.no_grad():
-                        probs = self.helper.model(enc_new_texts["input_encodings"]["input_ids"], "input_ids", emb_ctx, additional_forward_kwargs=enc_new_texts)
-                        probs = (probs + 1) / 2
+                    probs = fowr_function(self.helper,enc_new_texts,target)
                     probs_removing.append(probs)
                 else:
                     probs_removing.append(torch.empty(0,device=get_device()))
             # -----
-            discrete_expl_ths
+
             # compute probability difference
             if self.SHORT_NAME == 'aopc_suff':
                 removal_importance = baseline - probs_removing[0]
@@ -144,10 +163,9 @@ class AOPC_Evaluation(BaseEvaluator):
             # print(f'Full text:\n{input_text}\n{baseline}')
             # for i,p in zip(discrete_expl_ths,probs_removing):
             #     print(f'{i}:{p}')
-            with torch.no_grad():
-                empty_string = model_wrapper.preprocess_input('')
-                probs = self.helper.model(empty_string["input_encodings"]["input_ids"], "input_ids", emb_ctx, additional_forward_kwargs=empty_string)
-                empty_baseline = (probs + 1) / 2
+            # with torch.no_grad():
+            empty_string = model_wrapper.preprocess_input('')
+            empty_baseline = fowr_function(self.helper,empty_string,target)
             probs_removing= torch.cat((empty_baseline,probs_removing[0],probs_removing[1],baseline))
             probs_removing=probs_removing.tolist()
             # print(baseline)
@@ -206,16 +224,16 @@ class AOPC_Comprehensiveness_Evaluation(AOPC_Evaluation):
 
 
 
-    def compute_evaluation(self, explanation: Explanation, word_evaluation: bool,sentence_evaluation:bool,normalize=False, **evaluation_args) -> Evaluation:
+    def compute_evaluation(self, explanation: Explanation, word_evaluation: bool,sentence_evaluation:bool,task:str,normalize=False, **evaluation_args) -> Evaluation:
         # if (explanation.scores < 0).all():
         #     explanation.scores=explanation.scores + abs(min(explanation.scores))
         try:
             if word_evaluation:
-                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func_words,word_evaluation,sentence_evaluation,**evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds
+                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func_words,word_evaluation,sentence_evaluation,task,**evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds
             elif sentence_evaluation:
-                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func_sentence,word_evaluation,sentence_evaluation, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds
+                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func_sentence,word_evaluation,sentence_evaluation,task, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds
             else:
-                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func,word_evaluation,sentence_evaluation, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds 
+                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func,word_evaluation,sentence_evaluation,task,**evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds 
         except Exception as e :
             print('----')
             print(e)
@@ -319,16 +337,16 @@ class AOPC_Sufficiency_Evaluation(AOPC_Evaluation):
 
         return discrete_expl_th_token_ids 
 
-    def compute_evaluation(self, explanation: Explanation, word_evaluation: bool,sentence_evaluation:bool,normalize=False, **evaluation_args) -> Evaluation:
+    def compute_evaluation(self, explanation: Explanation, word_evaluation: bool,sentence_evaluation:bool,task,normalize=False, **evaluation_args) -> Evaluation:
         # if (explanation.scores < 0).all():
         #     explanation.scores=explanation.scores + abs(min(explanation.scores))
         try:
             if word_evaluation:
-                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func_words,word_evaluation,sentence_evaluation, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds
+                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func_words,word_evaluation,sentence_evaluation,task, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds
             elif sentence_evaluation:
-                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func_sentence,word_evaluation,sentence_evaluation, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds
+                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func_sentence,word_evaluation,sentence_evaluation,task, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds
             else:
-                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func,word_evaluation,sentence_evaluation, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds 
+                result,probs_removing= super().compute_evaluation(explanation, self._aopc_func,word_evaluation,sentence_evaluation,task, **evaluation_args)# ,probs_removing, discrete_expl_ths,thresholds 
         except Exception as e :
             print('----')
             print(e)

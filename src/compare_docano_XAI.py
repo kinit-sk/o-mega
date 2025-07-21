@@ -16,10 +16,9 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import average_precision_score
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
-from dataset import OurDataset
 from functools import partial
 from xai import GAE_Explain, ConservativeLRP, semantic_search_forward_function,Occlusion_word_level
-from explain import STS_ExplainWrapper, ExplanationExecuter, compare_multiple_explanation_methods,SentenceTransformerToHF
+from explain import STS_ExplainWrapper, ExplanationExecuter_STS, ExplanationExecuter_CT,compare_multiple_explanation_methods,SentenceTransformerToHF,ClassificationWrapper
 import utils
 from annotations import Annotations, TokenConversion
 from captum._utils.models.linear_model import SkLearnLasso
@@ -32,7 +31,7 @@ import captum.attr as a
 from optuna.trial import TrialState,Trial
 import seaborn as sns
 import time 
-from dataset import OurDataset
+from dataset import OurDataset,HuggingfaceDataset
 import copy
 import importlib
 import itertools
@@ -43,11 +42,13 @@ import tracemalloc
 import gc
 from collections import Counter
 from itertools import product
+from functools import partial
+
 
 
 class Check_docano_XAI:
         
-    def __init__(self,rationale_dataset_path: str,xai_dataset: OurDataset,tuple_indexes: tuple[tuple]) -> None:
+    def __init__(self,rationale_dataset_path: str,xai_dataset: OurDataset|HuggingfaceDataset,tuple_indexes: tuple[tuple]) -> None:
         with open(rationale_dataset_path, "r", encoding="utf-8") as f:
                 self.rationale_dataset = json.load(f)
         self.tuple_indexes=tuple_indexes
@@ -594,8 +595,8 @@ class Compare_docano_XAI:
             xai_tensor=xai_tensor[len(list_tok):]
         adjusted_tensor=torch.Tensor(adjusted_tensor) 
         len_tens=list(adjusted_tensor.size())
-        if len_tens[0] > 512:
-           adjusted_tensor=adjusted_tensor[:512]
+        if len_tens[0] > tokenizer.model_max_length:
+           adjusted_tensor=adjusted_tensor[:tokenizer.model_max_length]
         return adjusted_tensor
         
 
@@ -631,7 +632,7 @@ class Compare_docano_XAI:
             print('')
 
 
-    def change_token_explanation(self,model:STS_ExplainWrapper,dataset:OurDataset,sentence_exp:bool=False,word_exp:bool=False) -> pd.DataFrame:    
+    def change_token_explanation(self,model:STS_ExplainWrapper |ClassificationWrapper,dataset:OurDataset | HuggingfaceDataset,sentence_exp:bool=False,word_exp:bool=False) -> pd.DataFrame:    
         assert sentence_exp != word_exp, "Error: You cannot compute sentence explanation and word explanations at the same time." 
         new_importance_map=[]
         for index_doccano,post_claim_pair in enumerate(self.rationale_dataset):
@@ -1047,7 +1048,8 @@ class Compare_docano_XAI:
 
 class Hyper_optimalization:
         def __init__(self,
-                    dataset:OurDataset,
+                    dataset:OurDataset|HuggingfaceDataset,
+                    task:str,
                     model_path:str,
                     embeddings_module_name:str,
                     methods:list,
@@ -1064,7 +1066,12 @@ class Hyper_optimalization:
                     plausability_weight:int=0.5,
                     additional_metric_weight:int=0.3,
                     multiple_object:bool=False,
-                    additional_metric:list=None) -> None:
+                    additional_metric:list=None,
+                    num_classes=None) -> None:
+            tasks = ['post_claim_matching', 'text_classification']
+            assert task in tasks, \
+                f"Available tasks {allowed_metrics}"
+            self.task= task
             self.methods= methods
             self.normalizations= normalizations
             self.embeddings_module_name=embeddings_module_name
@@ -1075,6 +1082,7 @@ class Hyper_optimalization:
             self.method_param=method_param
             self.explanations_path=explanations_path
             self.multiple_object=multiple_object
+            self.num_classes=num_classes
             allowed_metrics = ['localization', 'point_game', 'spareness', 'gini']
             if additional_metric is not None:
                 assert all(m in allowed_metrics for m in additional_metric), \
@@ -1094,6 +1102,7 @@ class Hyper_optimalization:
             self.faithfulness_weight=faithfulness_weight
             self.visualizations_metric=[]
             self.additional_results=[]
+            self.final_head=self.define_final_head(task)
             # self.plausability_word_evaluation=plausability_word_evaluation
             # self.faithfulness_word_evaluation=faithfulness_word_evaluation
             # faithfulness_word_evaluation:bool=False,plausability_word_evaluation:bool=False,
@@ -1151,7 +1160,7 @@ class Hyper_optimalization:
                                                          Sum of all 3 weights must be 1.
             """
 
-        def process_input_dataset(self,dataset:OurDataset):
+        def process_input_dataset(self,dataset:OurDataset|HuggingfaceDataset):
             """
             Load datasets with specific perc and order the Ourdataset and dataset with rationale with masks.
             """
@@ -1166,6 +1175,8 @@ class Hyper_optimalization:
                     indexes_xai=indexes_xai[:length_dataset]    
                     dataset.fact_check_post_mapping = [dataset.fact_check_post_mapping[i] for i in indexes_xai]                
                     doc_data=doc_data[:length_dataset]
+                if len(dataset) == 0:
+                    raise ValueError("Dataset is empty and does not match rationale")
                 return doc_data,dataset
 
             else: 
@@ -1173,10 +1184,19 @@ class Hyper_optimalization:
                 length_dataset=round(length_dataset)
                 dataset.fact_check_post_mapping=dataset.fact_check_post_mapping[:length_dataset]
                 return None,dataset 
-       
-
-
-
+            
+        def get_wrapper_constructor(self,task: str, **kwargs):
+            constructors = {
+                'post_claim_matching': STS_ExplainWrapper,
+                'text_classification': ClassificationWrapper
+            }
+            return partial(constructors[task], **kwargs)
+        def define_final_head(self,task):
+            if task == 'post_claim_matching':
+                final_head=self.get_wrapper_constructor(task)
+            if task == 'text_classification':
+                final_head=self.get_wrapper_constructor(task,num_classes=self.num_classes)
+            return final_head
 
         def compute_combinations(model_param, method_param, methods, normalizations):
             """
@@ -1254,7 +1274,6 @@ class Hyper_optimalization:
                 existing_data = []
             except Exception as e :
                 print(e)
-                print('Explanations are not loaded')
             for exp in existing_data:
                 # Transfer 'parameters' from list to tuple to be able check explanations
                 try:
@@ -1265,13 +1284,12 @@ class Hyper_optimalization:
                                 p = {k: tuple(v) if isinstance(v, list) else v for k, v in exp['method_param'][method]['parameters'].items()}
                                 exp['method_param'][method]['parameters'] = p
                     if exp['method_param']==method_param and exp['model_param']==model_param and list(exp['explanation'].keys())[0]==method:
-                        # post_exp=torch.tensor(exp['explanation'][method][0]).to(utils.get_device())
-                        # claim_exp=torch.tensor(exp['explanation'][method][1]).to(utils.get_device())
-                        exp['explanation'][method]=(torch.tensor(exp['explanation'][method][0]),# , dtype=torch.float64
-                                                    torch.tensor(exp['explanation'][method][1])) #, dtype=torch.float64
+                        exp['explanation'][method] = tuple(
+                            torch.tensor(item) for item in exp['explanation'][method]
+                        )
                         matched_explanations.extend([exp])
-                except:
-                    print('')
+                except Exception as e :
+                    print(e)
             return matched_explanations
         
         def load_explanations_ids(explanations):
@@ -1293,28 +1311,48 @@ class Hyper_optimalization:
                 expl['explanation'] = {}
                 for method in methods:
                     if method in explanations[num]['explanation'].keys():
-                        norm=getattr(Compare_docano_XAI, normalization)
+                    #     norm=getattr(Compare_docano_XAI, normalization)
 
-                        if isinstance(explanations[num]['explanation'][method][0],list):
-                            explanations[num]['explanation'][method][0] = torch.tensor(explanations[num]['explanation'][method][0])
-                        norm_pos=norm(explanations[num]['explanation'][method][0])
-                        try:
-                            min_pos=float(min(norm_pos[~torch.isnan(norm_pos)]))
-                        except:
-                            min_pos=1e-6
-                        post_ten=torch.nan_to_num(norm_pos,nan=min_pos-1e-4)
+                    #     if isinstance(explanations[num]['explanation'][method][0],list):
+                    #         explanations[num]['explanation'][method][0] = torch.tensor(explanations[num]['explanation'][method][0])
+                    #     norm_pos=norm(explanations[num]['explanation'][method][0])
+                    #     try:
+                    #         min_pos=float(min(norm_pos[~torch.isnan(norm_pos)]))
+                    #     except:
+                    #         min_pos=1e-6
+                    #     post_ten=torch.nan_to_num(norm_pos,nan=min_pos-1e-4)
 
-                        if isinstance(explanations[num]['explanation'][method][1],list):
-                            explanations[num]['explanation'][method][1] = torch.tensor(explanations[num]['explanation'][method][1])
-                        norm_claim=norm(explanations[num]['explanation'][method][1])
-                        try:
-                            min_claim=float(min(norm_claim[~torch.isnan(norm_claim)]))
-                        except:
-                            min_claim=1e-6
-                        claim_ten=torch.nan_to_num(norm_claim,nan=min_claim-1e-4)
+                    #     if isinstance(explanations[num]['explanation'][method][1],list):
+                    #         explanations[num]['explanation'][method][1] = torch.tensor(explanations[num]['explanation'][method][1])
+                    #     norm_claim=norm(explanations[num]['explanation'][method][1])
+                    #     try:
+                    #         min_claim=float(min(norm_claim[~torch.isnan(norm_claim)]))
+                    #     except:
+                    #         min_claim=1e-6
+                    #     claim_ten=torch.nan_to_num(norm_claim,nan=min_claim-1e-4)
                         
-                        xai_tensor=(post_ten,claim_ten)
-                        expl['explanation'][method] = xai_tensor
+                    #     xai_tensor=(post_ten,claim_ten)
+                        norm = getattr(Compare_docano_XAI, normalization)
+                        xai_tensor = []
+                        num_expl = len(explanations[num]['explanation'][method])
+
+                        for i in range(num_expl):
+                            if method in explanations[num]['explanation']:
+                                # Convert list to tensor if needed
+                                if isinstance(explanations[num]['explanation'][method][i], list):
+                                    explanations[num]['explanation'][method][i] = torch.tensor(explanations[num]['explanation'][method][i])
+
+                                # Normalize and handle NaN values
+                                normalized = norm(explanations[num]['explanation'][method][i])
+                                try:
+                                    min_val = float(min(normalized[~torch.isnan(normalized)]))
+                                except:
+                                    min_val = 1e-6
+                                processed_tensor = torch.nan_to_num(normalized, nan=min_val-1e-4)
+                                xai_tensor.append(processed_tensor)
+
+                        expl['explanation'][method] = tuple(xai_tensor)
+                        # expl['explanation'][method] = xai_tensor
                 expl['claim'] =  explanations[num]['claim']
                 expl['post'] =  explanations[num]['post']
                 list_exp.append(expl)
@@ -1327,7 +1365,8 @@ class Hyper_optimalization:
             """
             if cr_explanations:
                 for one_exp in cr_explanations:
-                    one_exp['explanation'][method]=(one_exp['explanation'][method][0].tolist(),one_exp['explanation'][method][1].tolist())
+                    one_exp['explanation'][method] = tuple(x.tolist() for x in one_exp['explanation'][method])
+                    # one_exp['explanation'][method]=(one_exp['explanation'][method][0].tolist(),one_exp['explanation'][method][1].tolist())
                 try:
                     with open(explanations_path, 'r',encoding='utf-8') as file:
                         existing_data = json.load(file)
@@ -1346,21 +1385,16 @@ class Hyper_optimalization:
                 print(f"Layer: {module.__class__.__name__}, Output Shape: {output.shape}")
     
             adjust_model_param={}
-            model=None
-
-            # if 'e5' in self.model_path:
-            #     setup= STS_ExplainWrapper.setup_t5_transformer()
-            # else:
-            #     setup= STS_ExplainWrapper.setup_t5_transformer()          
+            model=None        
             
             if 'implemented_method' in model_param:
                     if method=='Occlusion_word_level':
-                        model_cap= STS_ExplainWrapper.setup_transformer(self.model_path,self.embeddings_module_name)
+                        model_cap= self.final_head.func.setup_transformer(self.model_path,self.embeddings_module_name,**self.final_head.keywords)
                     else:
                         model_cap=SentenceTransformerToHF(self.model_path).to(utils.get_device()).eval()
 
             if 'layer' in model_param:
-                    model=STS_ExplainWrapper.setup_transformer(self.model_path,self.embeddings_module_name,interpretable_embeddings=True)
+                    model=self.final_head.func.setup_transformer(self.model_path,self.embeddings_module_name,interpretable_embeddings=True,**self.final_head.keywords)
                     # adjust_model_param['layer']=[]
                     for layer in model_param['layer']:
                             _, layer_str = layer.rsplit(".", 1)
@@ -1388,8 +1422,7 @@ class Hyper_optimalization:
 
 
             if model == None and 'implemented_method' not in model_param: 
-                    model=STS_ExplainWrapper.setup_transformer(self.model_path,self.embeddings_module_name,interpretable_embeddings=True)
-            
+                    model=self.final_head.func.setup_transformer(self.model_path,self.embeddings_module_name,interpretable_embeddings=True,**self.final_head.keywords)
             if 'implemented_method' not in model_param:
                     method_w_gaps = method.replace(" ", "")
                     method_att = getattr(a, method_w_gaps) 
@@ -1409,11 +1442,11 @@ class Hyper_optimalization:
                 """
                 Compute explanations for implemented methods
                 """
-                def foward_fun(enc):
+                def foward_fun(enc,model_max_length:int):
                     try:
-                        if list(enc['input_ids'].size())[1]>512:
+                        if list(enc['input_ids'].size())[1]>model_max_length:
                             for key in enc:
-                                enc[key]=enc[key][:, :512]
+                                enc[key]=enc[key][:, :model_max_length]
                             with torch.no_grad():
                                 emb = model(**enc)[0]
                                 forward_function = partial(semantic_search_forward_function, embedding=emb)
@@ -1436,29 +1469,26 @@ class Hyper_optimalization:
                     explanation, predictions = explain_class._explain_batch(model, tokenizer, text,forward_function=forward_function)
                     explain_class.cleanup()
                     return explanation, predictions   
-                try:                
-                    tokenizer = get_tokenizer(model)
-                    claim_enc = tokenizer(claim, return_tensors="pt").to(utils.get_device())
-                    post_enc = tokenizer(post, return_tensors="pt").to(utils.get_device())
-                    if not method== 'Occlusion_word_level':
-                        forward_function=foward_fun(claim_enc)
-                        post_explanation, _=com_simil(model, tokenizer, post,method,forward_function,model_param)
-                        forward_function=foward_fun(post_enc)
-                        claim_explanation, _=com_simil(model, tokenizer, claim,method,forward_function,model_param)
-                    else:
-                        cls_method=globals()[method]
-                        occl_class= cls_method(tokenizer=tokenizer,model=model,forward_func=model.forward_tokens,**method_param[method]['parameters']) 
-                        post_explanation,claim_explanation = occl_class.post_claim_occlusion(post,claim)
-                    print('\n')
-                    print(f'[post]:{post}')
-                    print(f'[claim]:{claim}')
-                    print('\n')
-                    explanation={}
-                    explanation['explanation']={method:(post_explanation,claim_explanation)} 
-                    explanation['post']=post
-                    explanation['claim']=claim
-                except Exception as e:
-                    print(e)
+                tokenizer = get_tokenizer(model)
+                claim_enc = tokenizer(claim, return_tensors="pt").to(utils.get_device())
+                post_enc = tokenizer(post, return_tensors="pt").to(utils.get_device())
+                if not method== 'Occlusion_word_level':
+                    forward_function=foward_fun(claim_enc,tokenizer.model_max_length)
+                    post_explanation, _=com_simil(model, tokenizer, post,method,forward_function,model_param)
+                    forward_function=foward_fun(post_enc,tokenizer.model_max_length)
+                    claim_explanation, _=com_simil(model, tokenizer, claim,method,forward_function,model_param)
+                else:
+                    cls_method=globals()[method]
+                    occl_class= cls_method(tokenizer=tokenizer,model=model,forward_func=model.forward_tokens,**method_param[method]['parameters']) 
+                    post_explanation,claim_explanation = occl_class.post_claim_occlusion(post,claim)
+                print('\n')
+                print(f'[post]:{post}')
+                print(f'[claim]:{claim}')
+                print('\n')
+                explanation={}
+                explanation['explanation']={method:(post_explanation,claim_explanation)} 
+                explanation['post']=post
+                explanation['claim']=claim
                 return [explanation]
             # importance_map[0]['explanation'][method]
                         
@@ -1488,8 +1518,10 @@ class Hyper_optimalization:
         #     print(list_tok)
 
             #put evaluation object 
-            if 'implemented_method' not in unpack_model_param:
-                explain_wrappers.append(ExplanationExecuter(model_cap,**method_param[method],visualize_explanation=False,apply_normalization=False))
+            if 'implemented_method' not in unpack_model_param and self.task == 'post_claim_matching':
+                explain_wrappers.append(ExplanationExecuter_STS(model_cap,**method_param[method],visualize_explanation=False,apply_normalization=False))
+            else: 
+                explain_wrappers.append(ExplanationExecuter_CT(model_cap,**method_param[method],visualize_explanation=False,apply_normalization=False))
             if len(self.dataset) == 0: 
                 raise ValueError('Dataset is empty. Please load the dataset.')
             # creating explantions
@@ -1506,7 +1538,13 @@ class Hyper_optimalization:
                     importance_map=self.exp_implemented_met(post,claim,method,model_cap,method_param,model_param)
                     tokenizer=get_tokenizer(model_cap)
                 else: 
-                    importance_map=compare_multiple_explanation_methods(explain_wrappers, post, claim, additional_attribution_kwargs= {}, method_names=[method],visualize=False)
+                    importance_map=compare_multiple_explanation_methods(explain_wrappers, 
+                                                                        post, 
+                                                                        claim, 
+                                                                        additional_attribution_kwargs= {}, 
+                                                                        method_names=[method],
+                                                                        task=self.task,
+                                                                        visualize=False)
                     tokenizer=get_tokenizer(model_cap.forward_func)
                 importance_map[0]['ids']=ids
                 importance_map[0]['method_param']=method_param
@@ -1530,7 +1568,7 @@ class Hyper_optimalization:
                             token_attributions=exp[0].tolist()
                             for d in id_special_token:
                                 if d > len(token_attributions):
-                                    token_attributions.pop(511)
+                                    token_attributions.pop(tokenizer.model_max_length-1)
                                 else: 
                                     token_attributions.pop(d)
 
@@ -1544,14 +1582,13 @@ class Hyper_optimalization:
                 post = [tok for tok in post if tok not in tokenizer.all_special_tokens]
                 importance_map[0]['post']=[post]
                 #adjusting_claim
-                claim=tokenizer(claim)
-                claim=tokenizer.convert_ids_to_tokens(claim['input_ids'])
-                claim=[tok for tok in claim if tok not in tokenizer.all_special_tokens]
-                importance_map[0]['claim']=[claim]
-                # if 'e5' in self.model_path:  # here need to change 
-                #     importance_map[0]['explanation'][method]=(importance_map[0]['explanation'][method][0][:,1:-1],importance_map[0]['explanation'][method][1][:,1:-1])
-                # if 'T5' in self.model_path:  # here need to change 
-                #     importance_map[0]['explanation'][method]=(importance_map[0]['explanation'][method][0][:,:-1],importance_map[0]['explanation'][method][1][:,:-1])
+                if self.task == 'post_claim_mathing':
+                    claim=tokenizer(claim)
+                    claim=tokenizer.convert_ids_to_tokens(claim['input_ids'])
+                    claim=[tok for tok in claim if tok not in tokenizer.all_special_tokens]
+                    importance_map[0]['claim']=[claim]
+                else:
+                    importance_map[0]['claim']=[[claim]]
                 explanations.extend(importance_map)
                 created_explanations.extend(importance_map)
             if created_explanations:
@@ -1604,7 +1641,7 @@ class Hyper_optimalization:
                 method_param=copy.deepcopy(self.method_param)
 
             model_param= {method: model_param[method]} if method in model_param else {}
-            method_param= {method: method_param[method]} if method in method_param else {}
+            method_param= {method: method_param[method]} if method in method_param else {method:{}}
             return method_param,model_param
         @staticmethod
         def empty_string_baseline(model_path,embeddings_module_name,indexes_xai,dataset):
@@ -1613,7 +1650,7 @@ class Hyper_optimalization:
             for i in range(0,len(indexes_xai)):
                 claim, _= dataset[i]
                 print(claim)
-                model=STS_ExplainWrapper.setup_transformer(model_path,embeddings_module_name)
+                model=STS_ExplainWrapper.setup_transformer(model_path,embeddings_module_name)  # HERE add final_head
                 enc_ctx = model.model.preprocess_input(claim) #
                 enc_text = model.model.preprocess_input('')
                 with torch.no_grad():
@@ -1742,15 +1779,16 @@ class Hyper_optimalization:
             Choose method, parameters of method and normalization, compute explanations and evaluate explanations. 
             Returns: result of hyperoptimalization based on self.multi_objective return 1 or more numbers   
             """
+            #select method his parameters by optuna
             method=trial.suggest_categorical('method', self.methods)
             normalization = trial.suggest_categorical('normalization', self.normalizations)
-            # if not isinstance(self.explanations_path, str):  # toto sa vymaze
             method_param,model_param=self.take_param(method)
             trial,method_param,model_param= Hyper_optimalization.choose_trials(trial,method,method_param,model_param)
             if model_param:
                 print(model_param[method])
             print(normalization)
             print(method)
+            # sae duplicates
             for previous_trial in trial.study.trials:
                 if previous_trial.state == TrialState.COMPLETE and trial.params == previous_trial.params:
                     self.counter=self.counter+1
@@ -1762,7 +1800,7 @@ class Hyper_optimalization:
                     else:
                         print(f"Duplicated trial: {trial.params}, return {previous_trial.value}")
                         return previous_trial.value
-
+            # Crate explanations
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 explanations,model_cap=self.compute_explanation(method_param,model_param,method)
@@ -1773,7 +1811,6 @@ class Hyper_optimalization:
                 model=model_cap.forward_func
             else:
                 model=model_cap
-
 
             explanations=explanations[:len(self.dataset.fact_check_post_mapping)]
             explanations=Hyper_optimalization.adjust_explan(explanations,method,normalization)
@@ -1810,12 +1847,13 @@ class Hyper_optimalization:
 
 
             if 'implemented_method' in unpack_model_param:   
-                model_cap = STS_ExplainWrapper.setup_transformer(self.model_path,self.embeddings_module_name) # retrieve from function
+                model_cap = self.final_head.func.setup_transformer(self.model_path,self.embeddings_module_name,**self.final_head.keywords) # retrieve from function
                 final_metric, all_metrics= evaluation.evaluate(loader,
                                                                explanation_maps=explanations,
                                                                explanation_maps_token=self.explanation_maps_token,
                                                                explanation_maps_word=self.explanation_maps_word,
                                                                explanation_maps_sentence=self.explanation_maps_sentence,
+                                                               task=self.task,
                                                                method_name=method,
                                                                visualize=True,
                                                                model_param=model_param,
@@ -1825,13 +1863,14 @@ class Hyper_optimalization:
                                                             #    faithfulness_word_evaluation=self.faithfulness_word_evaluation)
                                                                 )
             else:
-                explain = ExplanationExecuter(model_cap, compute_baseline=False, visualize_explanation=False,apply_normalization=False)
+                explain = ExplanationExecuter_STS(model_cap, compute_baseline=False, visualize_explanation=False,apply_normalization=False)
                 final_metric, all_metrics= evaluation.evaluate(loader,
                                                                explain,
                                                                explanation_maps=explanations,
                                                                explanation_maps_token=self.explanation_maps_token,
                                                                explanation_maps_word=self.explanation_maps_word,
                                                                explanation_maps_sentence=self.explanation_maps_sentence,
+                                                               task=self.task,
                                                                method_name=method,
                                                                visualize=True,
                                                                model_param=model_param,
@@ -2061,7 +2100,7 @@ class Visualization_opt:
         ax.text(x_min+0.1, empty_post_cs - 0.027, x_axis_comment[0], ha='left', va='top', fontsize=12)
         ax.text(x_max-0.1, empty_post_cs - 0.027, x_axis_comment[1], ha='right', va='top', fontsize=12)
         if save_path_plot:
-            plt.savefig(f"{save_path_plot}_{vis_list[0]['metric']}.png")
+            plt.savefig(f"{save_path_plot}_{vis_list[0]['metric']}.png", bbox_inches='tight')
         plt.show()
         plt.close() 
 

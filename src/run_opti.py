@@ -7,7 +7,7 @@ from captum.attr._core.lime import get_exp_kernel_similarity_function
 from captum._utils.models.linear_model import SkLearnLasso
 from compare_docano_XAI import Hyper_optimalization,Check_docano_XAI,Visualization_opt,Compare_docano_XAI
 from explain import STS_ExplainWrapper,SentenceTransformerToHF
-from dataset import OurDataset
+from dataset import OurDataset,HuggingfaceDataset
 import architecture
 import torch
 import yaml
@@ -20,7 +20,11 @@ def load_config(yaml_path):
 def create_hyper_opt_object(config):
     hyper_config = config.get('Hyperoptimalization_parameters', {})
     dataset_path = hyper_config.pop('dataset', None)
-    dataset = OurDataset(csv_dirpath=dataset_path)
+    columns= hyper_config.pop('columns', None)
+    if columns:
+        dataset = HuggingfaceDataset(path=dataset_path,columns=columns)
+    else:
+        dataset = OurDataset(csv_dirpath=dataset_path)
     return Hyper_optimalization(dataset=dataset, **hyper_config)
 
 def run_optimalization_function(hyper_opt_object):
@@ -38,6 +42,7 @@ def Visualize_class_activation(Visualization_opt):
 
 
 if __name__ == "__main__":
+    print('Loading configuration')
     config = load_config("config_hyperoptimalization.yaml")
     hyper_opt = create_hyper_opt_object(config)
     best,trials,Visualization_opt=run_optimalization_function(hyper_opt)

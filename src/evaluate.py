@@ -13,7 +13,7 @@ import pandas as pd
 from architecture import SentenceTransformerToHF,get_tokenizer
 from dataset import OurDataset
 import utils
-from explain import ExplanationExecuter
+from explain import ExplanationExecuter_STS, ExplanationExecuter_CT,STS_ExplainWrapper
 import measures as m
 from measures import ExplanationWithRationale, BaseEvaluator
 import warnings
@@ -180,7 +180,7 @@ class EvaluateExplanation:
     
     def evaluate(
             self, data_loader: DataLoader, 
-            explain_method: ExplanationExecuter = None, 
+            explain_method: ExplanationExecuter_STS|ExplanationExecuter_CT = None, 
             explain_method_additional_attribution_kwargs: dict = {},
             explanation_maps=None, 
             explanation_maps_token:bool =None,
@@ -191,6 +191,7 @@ class EvaluateExplanation:
             model_param=None,
             visualize=False,
             model=None,
+            task:str=None,
             faithfulness_word_evaluation: bool = False,
             plausability_word_evaluation: bool = False,
     ) -> tuple[float, dict]:
@@ -268,7 +269,7 @@ class EvaluateExplanation:
                         warnings.simplefilter("ignore")
                         res= self._eval_pair(ferret_eval, tokenizer,  #aopc
                             _map, (claim, post), expl,
-                            word_evaluation,sentence_evaluation,ann
+                            word_evaluation,sentence_evaluation,ann,task
                         )
                         if isinstance(res,list):
                             probs.append(res[1])
@@ -341,6 +342,7 @@ class EvaluateExplanation:
         word_evaluation:bool=False,
         sentence_evaluation: bool=False,
         annotation:torch.tensor=None,
+        task: str= None
         # faithfulness_word_evaluation: bool = False,
         # plausability_word_evaluation: bool = False
 
@@ -414,22 +416,22 @@ class EvaluateExplanation:
             rationale=rationale
         )
         # calculating the evaluation measure for a specific datapoint 
-        return ferret_eval.compute_evaluation(explanation_obj,word_evaluation,sentence_evaluation,normalize=True)
+        return ferret_eval.compute_evaluation(explanation_obj,word_evaluation,sentence_evaluation,task,normalize=True)
 
-if __name__ == "__main__":
-    dataset = OurDataset(csv_dirpath="./data", split="test")
+# if __name__ == "__main__":
+    # dataset = OurDataset(csv_dirpath="./data", split="test")
 
-    #smaller ds for testing purposes
-    dataset.fact_check_post_mapping = dataset.fact_check_post_mapping[:20] 
-    loader = DataLoader(dataset, batch_size=4)
+    # #smaller ds for testing purposes
+    # dataset.fact_check_post_mapping = dataset.fact_check_post_mapping[:20] 
+    # loader = DataLoader(dataset, batch_size=4)
 
-    from  explain import STS_ExplainWrapper
-    import captum.attr as a
-    model = STS_ExplainWrapper.setup_transformer(model_path="../models/GTR-T5-FT",embeddings_module_name='encoder.embed_tokens')
-    method = a.LayerGradientXActivation(model, layer=model.get_embedding_layer())
-    explain = ExplanationExecuter(method, compute_baseline=False, visualize_explanation=False)
+    # from  explain import STS_ExplainWrapper
+    # import captum.attr as a
+    # model = STS_ExplainWrapper.setup_transformer(model_path="../models/GTR-T5-FT",embeddings_module_name='encoder.embed_tokens')
+    # method = a.LayerGradientXActivation(model, layer=model.get_embedding_layer())
+    # explain = ExplanationExecuter(method, compute_baseline=False, visualize_explanation=False)
 
-    evaluation = EvaluateExplanation(rationale_path="./tmp/rationale-test.json", verbose=True)
-    final_metric, all_metrics = evaluation.evaluate(loader, explain)
+    # evaluation = EvaluateExplanation(rationale_path="./tmp/rationale-test.json", verbose=True)
+    # final_metric, all_metrics = evaluation.evaluate(loader, explain)
 
-    pass
+    # pass
