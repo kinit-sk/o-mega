@@ -29,7 +29,7 @@ class AUPRC_PlausibilityEvaluation(BaseEvaluator):
         auc_score = auc(recall, precision)
         return auc_score
 
-    def compute_evaluation(self, explanation_with_rationale: ExplanationWithRationale,word_evaluation, sentence_evaluation, normalize=False, **evaluation_args):
+    def compute_evaluation(self, explanation_with_rationale: ExplanationWithRationale,word_evaluation, sentence_evaluation,task, normalize=False, **evaluation_args):
         # if isinstance(explanation_with_rationale, ExplanationWithRationale) == False:
         #     return None
         _, only_pos, _, _ = parse_evaluator_args(evaluation_args)
@@ -184,7 +184,7 @@ class Tokenf1_PlausibilityEvaluation(BaseEvaluator):
         )
         return instance_prec, instance_rec, instance_f1, tp, pos, pred_pos
 
-    def compute_evaluation(self, explanation_with_rationale: ExplanationWithRationale,word_evaluation,sentence_evaluation, normalize=False, **evaluation_args):
+    def compute_evaluation(self, explanation_with_rationale: ExplanationWithRationale,word_evaluation,sentence_evaluation,task, normalize=False, **evaluation_args):
 
         """Evaluate an explanation on the Token-f1 score Plausibility metric.
 
@@ -315,7 +315,7 @@ class TokenIOU_PlausibilityEvaluation(BaseEvaluator):
         iou = 0 if denom == 0 else num / denom
         return iou
 
-    def compute_evaluation(self, explanation_with_rationale: ExplanationWithRationale,word_evaluation,sentence_evaluation, normalize=False, **evaluation_args):
+    def compute_evaluation(self, explanation_with_rationale: ExplanationWithRationale,word_evaluation,sentence_evaluation,task, normalize=False, **evaluation_args):
 
         """Evaluate an explanation on the Intersection Over Union (IOU) Plausibility metric.
 

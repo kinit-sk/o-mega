@@ -20,6 +20,7 @@ import warnings
 import matplotlib.pyplot as plt 
 from collections import defaultdict
 import re
+from typing import Union, Optional
 
 class ClaimMatchingEvaluate:
     """Perform claim matching and evaluate model in claim matching task
@@ -180,10 +181,10 @@ class EvaluateExplanation:
     
     def evaluate(
             self, data_loader: DataLoader, 
-            explain_method: ExplanationExecuter_STS|ExplanationExecuter_CT = None, 
+            explain_method:  Optional[Union[ExplanationExecuter_STS, ExplanationExecuter_CT]] = None,
             explain_method_additional_attribution_kwargs: dict = {},
             explanation_maps=None, 
-            explanation_maps_token:bool =None,
+            explanation_maps_token: bool =None,
             explanation_maps_word:bool =None,
             explanation_maps_sentence:bool =None,
             method_name=None,

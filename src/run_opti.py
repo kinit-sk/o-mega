@@ -5,7 +5,9 @@ import optuna
 import warnings
 from captum.attr._core.lime import get_exp_kernel_similarity_function
 from captum._utils.models.linear_model import SkLearnLasso
-from compare_docano_XAI import Hyper_optimalization,Check_docano_XAI,Visualization_opt,Compare_docano_XAI
+from check_explanations import Compare_docano_XAI,Check_docano_XAI 
+from hyperoptimalization import Hyper_optimalization
+from visualization_opt import Visualization_opt
 from explain import STS_ExplainWrapper,SentenceTransformerToHF
 from dataset import OurDataset,HuggingfaceDataset
 import architecture

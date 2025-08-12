@@ -161,23 +161,21 @@ class AOPC_Evaluation(BaseEvaluator):
             aopc_ev = removal_importance.mean()
             evaluation_output = Evaluation(self.SHORT_NAME, aopc_ev)
             # print(f'Full text:\n{input_text}\n{baseline}')
-            # for i,p in zip(discrete_expl_ths,probs_removing):
-            #     print(f'{i}:{p}')
-            # with torch.no_grad():
+
             empty_string = model_wrapper.preprocess_input('')
             empty_baseline = fowr_function(self.helper,empty_string,target)
             probs_removing= torch.cat((empty_baseline,probs_removing[0],probs_removing[1],baseline))
             probs_removing=probs_removing.tolist()
             # print(baseline)
             # print(probs_removing)
-            # discrete_expl_ths.insert(0,input_text)
-            # thresholds=np.insert(thresholds,0,0)
             if self.SHORT_NAME=='aopc_suff':
-                n_thresholds= np.arange(-0.1 * len(full_discrete_expl_ths[0]), 0, 0.1) # array([-1. , -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2,-0.1]) for specific set 
+                n_thresholds= np.arange(-0.1 * len(full_discrete_expl_ths[1]), 0, 0.1) # array([-1. , -0.9, -0.8, -0.7, -0.6, -0.5, -0.4, -0.3, -0.2,-0.1]) for specific set 
+                thresholds = np.resize(thresholds, len(full_discrete_expl_ths[0]))
             else: 
                 n_thresholds= np.arange(-0.1, -0.1 * (len(full_discrete_expl_ths[0])+1), -0.1) # array([-0.1, -0.2, -0.3, -0.4, -0.5, -0.6, -0.7, -0.8, -0.9, -1. ]) for base algorithm
+                thresholds = np.resize(thresholds, len(full_discrete_expl_ths[1]))
             thresholds = np.concatenate(([0], n_thresholds,thresholds, [100]))
-            thresholds= np.round(thresholds, 1)
+            thresholds = np.round(thresholds, 1)
             results = [{'erassing_itterations': float(perc), 'prob': float(p)} for perc, p in zip(thresholds, probs_removing)]
             try:
                 return evaluation_output,results #,discrete_expl_ths,thresholds
