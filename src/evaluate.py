@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import re
 from typing import Union, Optional
+from check_explanations import Compare_docano_XAI
 
 class ClaimMatchingEvaluate:
     """Perform claim matching and evaluate model in claim matching task
@@ -193,6 +194,7 @@ class EvaluateExplanation:
             visualize=False,
             model=None,
             task:str=None,
+            annotation=None,
             faithfulness_word_evaluation: bool = False,
             plausability_word_evaluation: bool = False,
     ) -> tuple[float, dict]:
@@ -212,13 +214,14 @@ class EvaluateExplanation:
             if not annotation: 
                 ann=torch.tensor([])
 
-        else:   
+        else:
             post_explanations = explain_method.explain(
                     data_loader, 
                     additional_attribution_kwargs=explain_method_additional_attribution_kwargs,
                     return_post_explanation_only=True
                 )
-            ann=torch.tensor([])
+            if not annotation: 
+                ann=torch.tensor([])
 
        
         all_metrics = {

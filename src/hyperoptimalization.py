@@ -527,7 +527,7 @@ class Hyper_optimalization:
                 post = [tok for tok in post if tok not in tokenizer.all_special_tokens]
                 importance_map[0]['post']=[post]
                 #adjusting_claim
-                if self.task == 'post_claim_mathing':
+                if self.task == 'post_claim_matching':
                     claim=tokenizer(claim)
                     claim=tokenizer.convert_ids_to_tokens(claim['input_ids'])
                     claim=[tok for tok in claim if tok not in tokenizer.all_special_tokens]
