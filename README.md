@@ -1,8 +1,11 @@
 # O-MEGA-pipeline
-In this repository we validate the idea of automating the XAI algorithm selection by executing the O-MEGA pipeline 
-on a post claim matching (PFCR) task. For this particular task we use our [multiclaim](https://arxiv.org/abs/2305.07991) dataset that contains a database of various social posts 
+In this repository we validate the idea of automating the XAI algorithm selection by executing the O-MEGA pipeline on 2 tasks.
+
+- On a post claim matching (PFCR) task. For this particular task we use our [multiclaim](https://arxiv.org/abs/2305.07991) dataset that contains a database of various social posts 
 with their corresponding fact checks that either further acknowledge or disprove claims found in the posts. 
 In this work, we solely work with English version of this dataset.
+
+- On a text classification (TC) task, which can be used downloaded dataset from huggingface. Unfortunately, you need to create own annotations to use plausibility part of metrics (More info in section XAI evaluation process).
 
 ## Repo setup
 
@@ -21,7 +24,9 @@ In this section you can find the necessary steps to take for setting up the repo
     pip install -r requirements.txt
     ```
 
-### Data preprocessing
+### Data preprocessing 
+
+#### PCFR 
 
 1. Download the following folder with CSV files containing the posts and claims of multiclaim dataset and annotation to dataset [LINK](https://drive.google.com/file/d/1TGJFi0rkRTwhsPV52e0WvP5AxRVNyw-n/view)
 1. Place the downloaded folder in the root directory of the project.
@@ -31,44 +36,20 @@ The previous script creates the following important artifacts necessary for furt
 - `notebooks/data/posts.csv`, `notebooks/data/fact_checks.csv`, `notebooks/data/fact_check_post_mapping.csv` files representing clean multiclaim dataset
 - `data/annotations/rationale.json` file representing all the user rationale gathered from all other rationale JSON files
 
+#### TC
+
+You can download any dataset from huggingface which is suitable for text classification. Text must be in one column.
 
 ### Model preprocessing
 
-1. Download all the files (the entire directory) found on link corresponding to the fine-tuned model trained on multiclaim dataset. [LINK](https://drive.google.com/drive/folders/1PyCXoJBIi7zu26_HVSOORRK1pF6DNToT)
-1. Move the directory into the following path: `models/GTR-T5-FT`
+You can download our model fine-tuned model trained on multiclaim dataset. 
 
-## O-MEGA pipeline - Optimization 
-Run of O-MEGA pipeline can be with run_opti.py and yaml file (`./config_hyperoptimalization.yaml`) for a setting hyperparameters. 
+1. Download all the files (the entire directory) found on [LINK](https://drive.google.com/drive/folders/1PyCXoJBIi7zu26_HVSOORRK1pF6DNToT)
+1. Move the directory into the following path: ``` `models/GTR-T5-FT` ``` 
 
-1. First, follow the instructions in [Repo setup](#Repo-setup) section
-1. Setup specific parameters in `config_hyperoptimalization.yaml`
-1. Run python file with active conda environment
 
-```
-python ./src/run_opti.py
-```
-Second option is jupyter notebook on path `./notebooks/hyper_param.ipynb`
+Or it is a possibility to load models from Huggingface. List of possible models:
 
-### Setting parameters 
-
-Hyperoptimalization creates the possibility of finding the best combination of normalization and explanation method with specific hyperparameters . Using the `Hyper_optimalization` class and the `Hyper_optimalization.run_optimalization()` function, we can use optimalization algorithms from the [Optuna](https://optuna.readthedocs.io/en/stable/reference/samplers/index.html) library to speed up the process of finding the best combination of explainability and normalization methods. Class `Hyper_optimalization` set up several parameters neccesery for evaluation:
-
-#### Config_hyperoptimalization.yaml
-- `model_path` and `embeddings_module_name`: (string) Specific path of model loaded from and their embedding layer 
-- `methods`: (list(string)) methods which will be computed. 
-- `normalization`: (list(string)) Normalizations which will be used to normalize explanations. Normalizations must be same as names of functions in `Compare_docano_XAI` class.
-- `rationale_path`: (string) Path to rationales. Without rationales is not able to do plausibility metrics. 
-- `dataset`: (OurDataset) Load dataset with posts and claims
-- `exlanations_path`: (string) Path where will be saved and loaded already created explanations
-- `plausibility_weights` and `faithfulness_weights`:(float) Weights for groups of metrics (plausibility_weights+faithfulness_weights=1)
-- `model_param` and `method_param`: (dict[list] or dict[]) Use these to specify sets of possible hyperparameters for models and methods, respectively.
-- `explanation_maps_token`, `explanation_maps_word`,`explanation_maps_sentence` : (boolean) Define on which level are explanations post-processed
-- `multiple_object`: (boolean) Set Optuna hyperoptimalization to multiple-objective (plausability,faithfulness) optimalization
-
-After creation of explanations, explanations can be post-processed into interpretable_embeddings (`explanation_maps_word`=True) and sentences (`explanation_maps_sentence`=True). Unfortunately, you are able create only one type of explanations during hyperoptimalization. 
-
-#### Optional: 
-It is a possibility to load models from Huggingface. List of models:
 | model_path | embeddings_module_name |
 |-----------------------------------------------|--------------------------|
 | sentence-transformers/gtr-t5-large            | encoder.embed_tokens      |
@@ -84,6 +65,38 @@ It is a possibility to load models from Huggingface. List of models:
 | llmrails/ember-v1                             | embeddings.word_embeddings |
 | thenlper/gte-large                            | embeddings.word_embeddings |
 | intfloat/e5-large-v2                          | embeddings.word_embeddings |
+
+## O-MEGA pipeline - Optimization 
+Run of O-MEGA pipeline can be with run_opti.py and yaml file (`./config_hyperoptimalization.yaml`) for a setting hyperparameters. 
+
+1. First, follow the instructions in [Repo setup](#Repo-setup) section
+1. Setup specific parameters in `config_hyperoptimalization.yaml`
+1. Run this in command line: python src/run_opti.py
+
+```
+python ./src/run_opti.py
+```
+Second option is jupyter notebook on path `./notebooks/hyper_param.ipynb`
+
+### Setting parameters 
+
+Hyperoptimalization creates the possibility of finding the best combination of normalization and explanation method with specific hyperparameters . Using the `Hyper_optimalization` class and the `Hyper_optimalization.run_optimalization()` function, we can use optimalization algorithms from the [Optuna](https://optuna.readthedocs.io/en/stable/reference/samplers/index.html) library to speed up the process of finding the best combination of explainability and normalization methods. Class `Hyper_optimalization` set up several parameters neccesery for evaluation:
+
+#### Config_hyperoptimalization.yaml
+- `rationale_path`: (string) Path to rationales. Without rationales is not able to do plausibility metrics. 
+- `explanations_path`: (string) Path where to save or load created explanations. 
+- `task`: (string) Set up pipeline for specific task `post_claim_matching` or `text_classification`. If you set up TC as a task you need to set parameters `num_classes`(int) how many classes contain classification and `columns`(list) columns in dataset which are used as a text and label in format (text,label).
+- `model_path` and `embeddings_module_name`: (string) Specific path of model loaded from and their embedding layer 
+- `methods`: (list(string)) methods which will be computed. 
+- `normalization`: (list(string)) Normalizations which will be used to normalize explanations. Normalizations must be same as names of functions in `Compare_docano_XAI` class.
+- `dataset`: (OurDataset) Load dataset with posts and claims from folders or put path of huggingface dataset to download.
+- `exlanations_path`: (string) Path where will be saved and loaded already created explanations
+- `plausibility_weights` and `faithfulness_weights`:(float) Weights for groups of metrics (plausibility_weights+faithfulness_weights=1)
+- `model_param` and `method_param`: (dict[list] or dict[]) Use these to specify sets of possible hyperparameters for models and methods, respectively.
+- `explanation_maps_token`, `explanation_maps_word`,`explanation_maps_sentence` : (boolean) Define on which level are explanations post-processed
+- `multiple_object`: (boolean) Set Optuna hyperoptimalization to multiple-objective (plausability,faithfulness) optimalization
+
+After creation of explanations, explanations can be post-processed into interpretable_embeddings (`explanation_maps_word`=True) and sentences (`explanation_maps_sentence`=True). Unfortunately, you are able create only one type of explanations during hyperoptimalization. 
 
 #### Setting model and method parameters
 
@@ -170,17 +183,10 @@ of the post and the claim. Next, by applying XAI method, we propagate the gradie
 quantify the attribution of each token to the similarity score.
 
 
-In this project we work with transformers imported from sentence_transformers library. In order for us to have a traditional transformer HF interface for encoding the tokens and computing the 
-embedding of a specific input, we use a class `SentenceTransformerToHF`, that wraps the `SentenceTransformer` object and creates more accessible forward function. Subsequently, `STS_ExplainWrapper` class further wraps the logic of computing similarity of two inputs, one of which has already been precomputed, and class `ExplanationExecuter` incorporates the previous wrapper class and a specific Captum attribution XAI algorithm and calculates the attribution of one input to the similarity score.
+In this project we work with transformers imported from sentence_transformers library. In order for us to have a traditional transformer HF interface for encoding the tokens and computing the embedding of a specific input, we use a class `SentenceTransformerToHF`, that wraps the `SentenceTransformer` object and creates more accessible forward function. Subsequently, `STS_ExplainWrapper` class further wraps the logic of computing similarity of two inputs, one of which has already been precomputed, and class `ExplanationExecuter_STS` or for text classification `ExplanationExecutet_CT` incorporates the previous wrapper class and a specific Captum attribution XAI algorithm and calculates the attribution of one input to the similarity score.
 
 
 ## XAI evaluation process
 
-In order to evaluate the attribution maps created by multiple explanation methods, we extend [ferret](https://ferret.readthedocs.io/) library that
-implements 6 quantitative measures, three of which are faithfulness metrics that doesn't require any annotations, and three of which are plausibility metrics
-we've created rationale masks for. Since the ferret library only supports evaluation of attribution on classification tasks we had to further extend their implementation and 
-tailor it to our needs, to the STS task.
-
-
-For O-MEGA pipeline, we use the aforementioned 5 quantitative measures from the Ferret library, divided into two groups: plausibility, feasibility. Also, besides that we added [average precision score](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html) as an another metric for plausibility.
+In order to evaluate the attribution maps created by multiple explanation methods, we use the aforementioned 5 quantitative measures from the Ferret library, divided into two groups: plausibility, feasibility. Two of which are faithfulness metrics that doesn't require any annotations, and three of which are plausibility metrics Also, besides that we added [average precision score](https://scikit-learn.org/stable/modules/generated/sklearn.metrics.average_precision_score.html) as an another metric for plausibility. For CT are only available feasibility tasks.
 

@@ -5,7 +5,7 @@ import pandas as pd
 
 
 class Visualization_opt:
-    def __init__(self,methods,normalizations,counter,counter_normalizations,counter_normalizations_dup,counter_methods,counter_methods_dup,visualizations_metric,study,number_of_trials,time_opt,sampler,current,peak,additional_results,best):
+    def __init__(self,methods,normalizations,counter,counter_normalizations,counter_normalizations_dup,counter_methods,counter_methods_dup,visualizations_metric,study,number_of_trials,time_opt,sampler,current,peak,additional_results,best,pair_results):
         self.methods=methods
         self.normalizations=normalizations
         self.counter_dup=counter
@@ -22,6 +22,7 @@ class Visualization_opt:
         self.peak=peak
         self.additional_results=additional_results
         self.best=best
+        self.pair_results=pair_results
         self.save_path=None
 
 
@@ -278,7 +279,11 @@ class Visualization_opt:
             
             plt.tight_layout()
             plt.show()
-
-
+    def table_metrics(self):
+        df = pd.DataFrame(self.pair_results, columns=["post", "claim", "method", "method_param",'model_param','evaluation'])
+        df_metrics = df['evaluation'].apply(lambda lst: {k: v for d in lst for k, v in d.items()})
+        df_metrics = pd.json_normalize(df_metrics)
+        df = df.drop(columns=['evaluation']).join(df_metrics)
+        return df 
 
 

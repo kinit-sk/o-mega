@@ -1,13 +1,13 @@
 Hyperoptimalization_parameters:
- rationale_path: "./notebooks/tmp/Jaro_574_human_rational_tokens.json"
+#  rationale_path: "./data/annotations/rationale.json"
  explanations_path: "./notebooks/tmp/test.json"
- task: 'post_claim_matching' # 'text_classification'
+ task: 'text_classification' #  'post_claim_matching'
  dataset: "./notebooks/data"
-#  dataset: "llangnickel/long-covid-classification-data" 
-#  num_classes=6,
-#  columns:  # If you want 'post_claim_matching', delete columns variable 
-#  - text
-#  - label
+ dataset: "llangnickel/long-covid-classification-data" 
+ num_classes: 6
+ columns: 
+ - text
+ - label
  perc: 1
  model_path: "intfloat/multilingual-e5-large"
  embeddings_module_name: "embeddings.word_embeddings"
@@ -30,7 +30,7 @@ Hyperoptimalization_parameters:
        function_name:
          - captum._utils.models.linear_model.SkLearnLasso
        parameters:
-         alpha: [1e-19, 1e-25]
+         alpha: [1.0e-19, 1.0e-25]
    GAE_Explain:
      implemented_method: true
      layers:

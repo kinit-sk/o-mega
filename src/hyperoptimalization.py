@@ -89,6 +89,7 @@ class Hyper_optimalization:
             self.faithfulness_weight=faithfulness_weight
             self.visualizations_metric=[]
             self.additional_results=[]
+            self.pair_results=[]
             self.final_head=self.define_final_head(task)
             # self.plausability_word_evaluation=plausability_word_evaluation
             # self.faithfulness_word_evaluation=faithfulness_word_evaluation
@@ -163,7 +164,7 @@ class Hyper_optimalization:
                     dataset.fact_check_post_mapping = [dataset.fact_check_post_mapping[i] for i in indexes_xai]                
                     doc_data=doc_data[:length_dataset]
                 if len(dataset) == 0:
-                    raise ValueError("Dataset is empty and does not match rationale")
+                    raise ValueError("Dataset not match rationales")
                 return doc_data,dataset
 
             else: 
@@ -394,10 +395,12 @@ class Hyper_optimalization:
                     model_cap = method_att(model,**adjust_model_param)
             return model_cap,model_param
 
-        def exp_implemented_met(self,post:str,claim:str,method:str,model,method_param:dict,model_param:dict) -> list:
+        def exp_implemented_met(self,post:str,claim:str,method:str,model,method_param:dict,model_param:dict,task:str) -> list:
                 """
                 Compute explanations for implemented methods
                 """
+                def tex_cla():
+                    raise ValueError("Implemented methods are not able to do in Text Classification task")
                 def foward_fun(enc,model_max_length:int):
                     try:
                         if list(enc['input_ids'].size())[1]>model_max_length:
@@ -428,15 +431,17 @@ class Hyper_optimalization:
                 tokenizer = get_tokenizer(model)
                 claim_enc = tokenizer(claim, return_tensors="pt").to(utils.get_device())
                 post_enc = tokenizer(post, return_tensors="pt").to(utils.get_device())
-                if not method== 'Occlusion_word_level':
+                if not method== 'Occlusion_word_level' and task == 'post_claim_matching':
                     forward_function=foward_fun(claim_enc,tokenizer.model_max_length)
                     post_explanation, _=com_simil(model, tokenizer, post,method,forward_function,model_param)
                     forward_function=foward_fun(post_enc,tokenizer.model_max_length)
                     claim_explanation, _=com_simil(model, tokenizer, claim,method,forward_function,model_param)
-                else:
+                elif task == 'post_claim_matching':
                     cls_method=globals()[method]
                     occl_class= cls_method(tokenizer=tokenizer,model=model,forward_func=model.forward_tokens,**method_param[method]['parameters']) 
                     post_explanation,claim_explanation = occl_class.post_claim_occlusion(post,claim)
+                else:
+                    tex_cla()
                 print('\n')
                 print(f'[post]:{post}')
                 print(f'[claim]:{claim}')
@@ -463,10 +468,11 @@ class Hyper_optimalization:
             model_cap,unpack_model_param = self.set_model(method,unpack_model_param)
 
             #put evaluation object 
-            if 'implemented_method' not in unpack_model_param and self.task == 'post_claim_matching':
-                explain_wrappers.append(ExplanationExecuter_STS(model_cap,**method_param[method],visualize_explanation=False,apply_normalization=False))
-            else: 
-                explain_wrappers.append(ExplanationExecuter_CT(model_cap,**method_param[method],visualize_explanation=False,apply_normalization=False))
+            if  'implemented_method' not in unpack_model_param: 
+                if self.task == 'post_claim_matching':
+                    explain_wrappers.append(ExplanationExecuter_STS(model_cap,**method_param[method],visualize_explanation=False,apply_normalization=False))
+                else: 
+                    explain_wrappers.append(ExplanationExecuter_CT(model_cap,**method_param[method],visualize_explanation=False,apply_normalization=False))
             if len(self.dataset) == 0: 
                 raise ValueError('Dataset is empty. Please load the dataset.')
             # creating explantions
@@ -830,6 +836,7 @@ class Hyper_optimalization:
                 add_result.update({f"{tr['metric']}-probs":tr['probabilities']})
             #save info for plots 
             self.visualizations_metric.extend(all_metrics['visualization'])
+            self.pair_results.extend(all_metrics['results'])
             #save info for tables
             try:
                 if self.rationale_path:
@@ -930,7 +937,8 @@ class Hyper_optimalization:
                                         current_mb,
                                         peak_mb,
                                         self.additional_results,
-                                        best)
+                                        best,
+                                        self.pair_results)
             
             self.visualizations_metric=[]
             self.additional_results=[]

@@ -1,7 +1,7 @@
 import sys
 sys.path.append("../src")
 
-import optuna
+# import optuna
 import warnings
 from captum.attr._core.lime import get_exp_kernel_similarity_function
 from captum._utils.models.linear_model import SkLearnLasso
@@ -24,7 +24,7 @@ def create_hyper_opt_object(config):
     dataset_path = hyper_config.pop('dataset', None)
     columns= hyper_config.pop('columns', None)
     if columns:
-        dataset = HuggingfaceDataset(path=dataset_path,columns=columns)
+        dataset = HuggingfaceDataset(path=dataset_path,columns=columns,task=hyper_config['task'])
     else:
         dataset = OurDataset(csv_dirpath=dataset_path)
     return Hyper_optimalization(dataset=dataset, **hyper_config)

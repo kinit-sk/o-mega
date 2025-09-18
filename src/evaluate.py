@@ -227,7 +227,8 @@ class EvaluateExplanation:
         all_metrics = {
             "faithfulness": {},
             "plausibility": {},
-            "visualization":[]
+            "visualization":[],
+            "results":[]
         }
         # compute an average of each quantitative measure throughout the whole dataset
         for ferret_cls in self.faithfulness_classes+self.plausability_classes:
@@ -267,6 +268,7 @@ class EvaluateExplanation:
             ):
                 for it, (claim, post, expl) in enumerate(zip(claims, posts, explain_batch)):
                     _map = data_loader.dataset.fact_check_post_mapping[offset + it]
+                    all_metrics['results'].append([post,claim,method_name,method_param,model_param,{}])
                     if annotation:
                         ann=annotation[offset + it]
                     with warnings.catch_warnings():
@@ -279,6 +281,7 @@ class EvaluateExplanation:
                             probs.append(res[1])
                             res=res[0]
                     if hasattr(res,'score'):
+                        all_metrics['results'][-1][-1][ferret_cls.SHORT_NAME]=res.score
                         if res.score.item() != 0:
                             results.append(res.score)
                             # if hasattr(res,'probs'):
@@ -322,7 +325,21 @@ class EvaluateExplanation:
                 # plt.grid(True)
                 # plt.show()
                 # probs=[]
+        def make_hashable(x):
+            """Convert element (dict or other) into a hashable form for dict keys"""
+            if isinstance(x, dict):
+                return json.dumps(x, sort_keys=True)
+            return x
 
+        def group_lists(data):
+            grouped = {}
+            for row in data:
+                key = tuple(make_hashable(e) for e in row[:-1])
+                if key not in grouped:
+                    grouped[key] = row[:-1] + [[]] 
+                grouped[key][-1].append(row[-1])
+            return list(grouped.values())
+        all_metrics['results']= group_lists(all_metrics['results'])
 
         faithfulness = np.array(list(all_metrics["faithfulness"].values())).mean()
 
