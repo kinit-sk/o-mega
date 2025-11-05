@@ -1,13 +1,13 @@
 Hyperoptimalization_parameters:
-#  rationale_path: "./data/annotations/rationale.json"
+ rationale_path: "./data/annotations/rationale.json"
  explanations_path: "./notebooks/tmp/test.json"
- task: 'text_classification' #  'post_claim_matching'
+ task: 'post_claim_matching' # 'text_classification'
  dataset: "./notebooks/data"
- dataset: "llangnickel/long-covid-classification-data" 
- num_classes: 6
- columns: 
- - text
- - label
+#  dataset: "llangnickel/long-covid-classification-data" 
+#  num_classes: 6
+#  columns: 
+#  - text
+#  - label
  perc: 1
  model_path: "intfloat/multilingual-e5-large"
  embeddings_module_name: "embeddings.word_embeddings"

@@ -153,7 +153,7 @@ class EvaluateExplanation:
 
         self.rationale_json = None
         if rationale_path is not None:
-            with open(rationale_path) as f:
+            with open(rationale_path, 'r', encoding='utf-8') as f:
                 self.rationale_json = json.load(f)
             self.rationale_json_mapping = np.array(
                 [(data["fact_check_id"], data["post_id"]) 
